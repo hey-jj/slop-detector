@@ -1,0 +1,1128 @@
+# ai-slop canonical policy package. Single rule source for the crate and the
+# skill snapshot. Rule IDs are stable forever and never derived from display
+# names. Lexicon files under words/ are canonical data referenced by rule ID.
+
+[policy]
+version = "1.0.0"
+# sha256 over the canonical serialization of the whole package (sorted keys,
+# LF endings, sorted file list), computed with this field set to the empty
+# string. The build embeds the computed value in every result and snapshot.
+digest = ""
+
+[semantics]
+# tier: the result state a hit emits. violation | candidate | coverage_hint.
+# lifecycle: blocking | advisory | experimental | deprecated. Blocking rules
+#   count toward exit codes. Advisory and experimental rules are reported but
+#   never gate. Only candidate-tier rules may be demoted to advisory in
+#   deployment config. Violation-tier rules and family J are never demotable.
+# origin: owner-mandate | incident | harvest | research | autopsy. Rules with
+#   origin owner-mandate are exempt from measured-promotion review and are
+#   never proposed for demotion.
+# waiver: "human-only" restricts waivers to human signers regardless of the
+#   configured waiver authority. Absent, the configured authority applies.
+#   No authority configuration allows an agent to waive family J,
+#   instrumentation_error, or unsupported_input.
+# profiles map values: "apply" (fires at rule tier), "relax" (violation tier
+#   drops to candidate, candidate is reported advisory), "off". The key
+#   "default" covers unlisted profiles. commit-message may be split into
+#   subject/body/trailers fields.
+# position "block-start": start of a sentence, line, bullet item, heading, or
+#   blockquote line after markers are stripped.
+# Hits inside claimed-quotation regions: the rules listed below drop from
+# violation to candidate there. All other rules keep their state.
+quotation_downgrade = [
+  "SLOP-M001", "SLOP-M002", "SLOP-M003", "SLOP-M006",
+  "SLOP-A001", "SLOP-A002", "SLOP-T001", "SLOP-I001", "SLOP-I002",
+  "SLOP-O003",
+]
+profile_names = [
+  "public-bug-report", "commit-message", "changelog", "release-notes",
+  "readme", "api-docs", "cargo-metadata", "internal-doc",
+]
+
+# Core-rule stance per profile, consumed by the skill snapshot. Values:
+# apply | relax | invert | off. Rule 1: no facts about ourselves. Rule 2: no
+# conclusions drawn for the reader. Rule 3: no signature or attribution.
+# Rule 4: no rhetoric aimed at how the text lands.
+
+[profile.public-bug-report]
+format = "markdown"
+core_rules = { rule1 = "apply", rule2 = "apply", rule3 = "apply", rule4 = "apply" }
+notes = "Strictest profile. Identifiers and quoted code may contain banned words, handled by segmentation and the quotation downgrade."
+
+[profile.commit-message]
+format = "commit"
+core_rules = { rule1 = "relax", rule2 = "invert", rule3 = "relax", rule4 = "apply" }
+notes = "Rule 2 inverts: the message must say what changed and why. Rule 3 relaxes for structured trailers only. Process facts stay banned under rule 1."
+
+[profile.changelog]
+format = "markdown"
+core_rules = { rule1 = "relax", rule2 = "invert", rule3 = "apply", rule4 = "apply" }
+notes = "Rule 2 inverts: describe what a user observes. Rule 4 sharpens to no marketing language."
+
+[profile.release-notes]
+format = "markdown"
+core_rules = { rule1 = "relax", rule2 = "invert", rule3 = "apply", rule4 = "apply" }
+notes = "Same stances as changelog plus the body-structure rule SLOP-K004."
+
+[profile.readme]
+format = "markdown"
+core_rules = { rule1 = "relax", rule2 = "relax", rule3 = "invert", rule4 = "apply" }
+notes = "Rule 3 inverts: a License section with the exact expected wording is mandatory (SLOP-K005). Stating what the project does is the job. Hype is still rule 4."
+
+[profile.api-docs]
+format = "markdown"
+core_rules = { rule1 = "apply", rule2 = "relax", rule3 = "apply", rule4 = "apply" }
+notes = "Rustdoc and code comments. Behavioral claims need doctest backing (SLOP-K008). Comments explain why, not what."
+
+[profile.cargo-metadata]
+format = "manifest"
+core_rules = { rule1 = "relax", rule2 = "relax", rule3 = "apply", rule4 = "apply" }
+notes = "Package description, keywords, categories. Field rules in SLOP-K006."
+
+[profile.internal-doc]
+format = "markdown"
+core_rules = { rule1 = "off", rule2 = "off", rule3 = "off", rule4 = "apply" }
+notes = "Playbooks, runbooks, status ledgers. Naming models, paths, and process is the content. Style rules stay on. The scrub family is off."
+
+# ---------------------------------------------------------------------------
+# Family A: ornamental lexicon
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-A001"
+name = "ornamental-lexicon"
+family = "ornamental"
+tier = "violation"
+lifecycle = "blocking"
+origin = "owner-mandate"
+waiver = "human-only"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/ornamental.txt", case = "insensitive", boundary = "word" }
+guard = "Prose only. Code spans, fences, link URLs, and identifiers are excluded by segmentation. Known collisions with technical senses (a lock being unlocked, privilege elevation, financial leverage as a noun, robust statistics) go through the human waiver path, not an exemption."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-A002"
+name = "ornamental-homographs"
+family = "ornamental"
+tier = "violation"
+lifecycle = "blocking"
+origin = "owner-mandate"
+waiver = "human-only"
+view = "norm"
+match = { kind = "word-set", words = ["realm", "realms", "harnessing", "navigate", "navigates", "navigating", "landscape", "landscapes"], case = "insensitive", boundary = "word" }
+patterns = [
+  '(?i)\bharness(es)?\s{1,8}(the|your|its|their|our|this|that|these|those)\b',
+  "(?i)\\b(to|can|could|would|will|should|let('s)?|lets|help(s|ing)?|you|we|they|i|it)\\s{1,8}harness(es)?\\b",
+  '(?im)(^|[.!?]\s{1,8})harness\b',
+  '(?i)\bharness(es)?\s{1,8}(ai|ml|genai|llms?|machine\s{1,8}learning|artificial\s{1,8}intelligence|deep\s{1,8}learning|generative\s{1,8}ai|(large\s{1,8})?language\s{1,8}models?|neural\s{1,8}networks?)\b',
+]
+guard = "realm/navigate/landscape carry narrow technical-context exemptions listed in [rule.exemptions]; an exempt collocation does not fire, any other prose use blocks. harness is matched structurally as the slop VERB, FN-safety first (noun uses like 'test harness' are pervasive in technical prose, while determiner-only matching silently misses determiner-less verb slop like 'harness machine learning'): it fires with a following determiner+object (harness the power of; the demonstrative paradigm this/that/these/those is covered in full — a half-covered set would produce an arbitrary these-fires/those-misses asymmetry), OR preceded by a verb/subject signal (to/can/could/would/will/should/let/lets/let's/help/helps/helping/you/we/they/I/it harness) — the PRIMARY mechanism — OR as the imperative at a sentence/line start (Harness modern tooling), OR with an unambiguous AI-domain object (harness AI / ML / LLMs / machine learning / language models / neural networks); the determiner and object alternations supplement the verb-context forms, never replace them. The gerund 'harnessing' stays a word-set entry and fires everywhere. Noun uses (test/CI/orchestration harness, the harness ran, three harnesses) are preceded by articles or noun modifiers, follow none of the verb signals, and pass structurally with no exemption list. Accepted over-fires, chosen over any FN: a sentence-start noun compound (Harness configuration lives in rig.toml), a noun with a determiner- or relativizer-opened relative clause (the harness the CI uses; a harness that runs nightly — the 'that' cost of covering 'harness that capability'), and noun uses directly after a signal pronoun (make it harness-aware); pattern hits do not consult exemptions. Documented residual miss: an UNSIGNALED third-person subject with an article/quantifier object (The platform harnesses a modern API / such power / all the power) or a non-AI bare object (Teams harness telemetry) — those shapes fire only via a verb signal, the imperative, or the covered determiners/objects; covering articles after harness would fire on give-the-harness-a-name noun syntax, and covering bare objects means matching every noun compound."
+profiles = { default = "apply" }
+[rule.exemptions]
+realm = ["authentication realm", "auth realm", "kerberos realm", "security realm", "realm name", "protection realm"]
+navigate = ["navigate to", "navigates to", "navigating to", "navigate the file", "navigate the directory", "navigate the tree", "navigate the dom"]
+landscape = ["landscape orientation", "landscape mode", "portrait or landscape", "landscape page", "landscape printing"]
+
+[[rule]]
+id = "SLOP-A003"
+name = "current-model-overuse"
+family = "ornamental"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/era-overuse.txt", case = "insensitive", boundary = "word" }
+guard = "Exempt when the object is a concrete typographic or UI action (highlighting text in an editor, a showcase application as a proper noun) or, for load-bearing, literal structural engineering. Enhance passes when the changed metric and baseline are named."
+judge = "Is the word doing work a plain verb would do, or naming a concrete measured change?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-A004"
+name = "inflated-diction"
+family = "ornamental"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "autopsy"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/inflated-diction.txt", case = "insensitive", boundary = "word" }
+patterns = [
+  '(?i)\b(coverage|detection|analysis|review|validation|verification|evaluation|enforcement|linting|compliance)\s{1,8}instruments?\b',
+  '(?i)\b(generated|synthesized|produced|emitted)-(text|content|output|prose)\s{1,8}(defects?|artifacts?|issues?|surfaces?|concerns?)\b',
+]
+guard = "Curated inflated-substitution tells, kept deliberately small because the failure mode here is flooding dense legitimate technical prose: utilize/facilitate/operationalize where use, help, or run would do, aforementioned, and utilization outside a named resource metric (cpu utilization, memory utilization, and the other listed collocations are exempt). The leverage verb family already blocks under SLOP-A001 and is not duplicated. The first pattern targets the tool-noun stack (coverage instrument, detection instrument): the music, finance, avionics, and measurement senses (a financial instrument, instrument panel, a measurement instrument) and the verb sense (instrument the allocator) follow none of the listed modifiers and never fire; the one residual is an imperative verb directly after a listed noun with its comma omitted (to measure coverage instrument each block), left to the judge line. The second pattern targets the participial noun stack (generated-text defects). Pattern hits do not consult exemptions."
+judge = "Would the plain word (use, help, run, tool) lose information here?"
+profiles = { default = "apply" }
+[rule.exemptions]
+utilization = ["cpu utilization", "gpu utilization", "memory utilization", "heap utilization", "disk utilization", "bandwidth utilization", "link utilization", "resource utilization", "capacity utilization", "cache utilization", "core utilization", "pool utilization", "queue utilization", "utilization rate", "utilization ratio"]
+
+# ---------------------------------------------------------------------------
+# Family P: provider artifacts
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-P001"
+name = "tool-attribution-line"
+family = "provider-artifact"
+tier = "violation"
+lifecycle = "blocking"
+origin = "owner-mandate"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/provider-attribution.txt", case = "insensitive", boundary = "none" }
+guard = "Fires in prose and in commit trailers. Never fires inside code spans or fenced blocks, so fixtures and documentation that quote these tokens in code formatting are safe. Human Co-authored-by and Signed-off-by trailers are governed by SLOP-S001, not this rule."
+profiles = { default = "apply", internal-doc = "relax" }
+
+[[rule]]
+id = "SLOP-P002"
+name = "chat-export-artifact"
+family = "provider-artifact"
+tier = "violation"
+lifecycle = "blocking"
+origin = "owner-mandate"
+view = "prose"
+match = { kind = "word-set", lexicon = "words/provider-artifacts.txt", case = "sensitive", boundary = "none" }
+guard = "Prose and link-URL contexts only. Code spans and fenced blocks are excluded by segmentation, so this tool's own fixtures quoting an artifact token in code formatting never trip it. The generalized regex forms are in patterns."
+patterns = ['turn\d{1,4}(search|news|image|sports|forecast)\d{1,4}', '\[cite:\s{0,8}\d{1,6}\]', '\[span_\d{1,6}\]']
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-P003"
+name = "provider-punctuation-residue"
+family = "provider-artifact"
+tier = "violation"
+lifecycle = "blocking"
+origin = "owner-mandate"
+view = "prose"
+match = { kind = "regex-set" }
+patterns = ['【[^】]{0,120}】', '†\d', '‡\d']
+guard = "Lenticular brackets are exempt when the bracketed content contains CJK codepoints, since that is ordinary text in those scripts. Dagger-digit pairs are exempt when the pair begins its line - a footnote definition; inline dagger-digit residue still fires."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-P004"
+name = "chat-tracking-param"
+family = "provider-artifact"
+tier = "violation"
+lifecycle = "blocking"
+origin = "owner-mandate"
+view = "raw"
+match = { kind = "word-set", lexicon = "words/tracking-params.txt", case = "insensitive", boundary = "none", scope = "link-url" }
+guard = "Link-URL segments only, which includes autolinks and reference definitions. A code block demonstrating the parameter does not fire."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-P005"
+name = "typographic-quotes-in-code"
+family = "provider-artifact"
+tier = "violation"
+lifecycle = "blocking"
+origin = "research"
+view = "raw"
+match = { kind = "regex-set", scope = "code" }
+patterns = ['[‘’“”]']
+guard = "Fires only inside code spans and fenced code blocks, where typographic quotes are chat-UI copy residue that breaks compilation. Prose typographic quotes are legitimate and out of scope. Fenced blocks whose info string names a natural-language or text format are exempt."
+profiles = { default = "apply" }
+
+# ---------------------------------------------------------------------------
+# Family M: mechanical style
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-M001"
+name = "em-dash-in-prose"
+family = "mechanical-style"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['—', '\s–\s', '(?<=\w)--(?=\w)', '\s--\s']
+guard = "Prose only. The norm view resolves entities and escapes, so entity and escape spellings reach the same patterns. Table delimiter rows and front-matter are excluded by segmentation."
+profiles = { default = "apply", commit-message = { subject = "apply", body = "apply", trailers = "off" } }
+
+[[rule]]
+id = "SLOP-M002"
+name = "semicolon-in-prose"
+family = "mechanical-style"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['[;;；]']
+guard = "Prose only. Semicolons inside code spans and fenced blocks are excluded by segmentation. HTML entities in raw source that decode to text reach the norm view already decoded, so an entity ampersand form does not false-positive."
+profiles = { default = "apply", commit-message = { subject = "apply", body = "apply", trailers = "off" } }
+
+[[rule]]
+id = "SLOP-M003"
+name = "opening-however"
+family = "mechanical-style"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "word-set", words = ["however"], case = "insensitive", boundary = "word", position = "block-start" }
+guard = "Sentence-opening and line-opening only, using unicode-segmentation sentence bounds. Mid-sentence however is not the tic and does not fire."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-M004"
+name = "control-invisible-chars"
+family = "mechanical-style"
+tier = "violation"
+lifecycle = "blocking"
+origin = "incident"
+view = "raw"
+match = { kind = "regex-set" }
+patterns = ['[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '[\u{200B}\u{200C}\u{200D}\u{2060}\u{FEFF}]']
+guard = "Zero-width characters fire when their removal in the norm view changes any pattern match or when they appear inside a word, since invisible controls are an evasion channel. A leading BOM is handled by the input contract, not this rule. ZWJ inside an emoji sequence already excluded by SLOP-M006 handling does not double-report."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-M005"
+name = "structural-anomaly"
+family = "mechanical-style"
+tier = "violation"
+lifecycle = "blocking"
+origin = "incident"
+view = "raw"
+match = { kind = "structural", params = { unclosed_fence = true, raw_html_dominance_pct = 20, raw_html_dominance_floor_bytes = 800 } }
+guard = "Reports the artifact itself as defective, which is the fail-closed behavior for parse anomalies. Not subject to any downgrade. Raw-HTML dominance requires both the ratio and the absolute net-markup byte floor, so an idiomatic badge-header README does not trip on ratio alone. Numeric character references to invisible or control codepoints, and browser-decodable reference forms outside the CommonMark grammar inside HTML-derived text, are structural anomalies here rather than silently decoded or ignored."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-M006"
+name = "emoji-in-prose"
+family = "mechanical-style"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "prose"
+match = { kind = "regex-set" }
+patterns = ['\p{Emoji_Presentation}', '[✅❌✨❗⚠🚀🎉🔥💡]']
+guard = "Prose only. Emoji quoted as data inside code spans are excluded by segmentation. Codepoints with Emoji properties that are ordinary text characters (digits, plain symbols without variation selectors) do not fire."
+profiles = { default = "apply" }
+
+# ---------------------------------------------------------------------------
+# Family S: signatures, verdicts, pleasantries
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-S001"
+name = "signature-line"
+family = "signature"
+tier = "violation"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/signature-lines.txt", case = "insensitive", boundary = "none", position = "block-start" }
+patterns = ['(?m)^\s{0,8}--\s{1,8}\S', '(?m)^\s{0,8}—\s{1,8}\S']
+guard = "Prose sign-offs and attribution lines. In the commit-message trailers field, Signed-off-by and human Co-authored-by are structured metadata and off. Tool attribution anywhere is SLOP-P001. A readme License section naming the copyright holder is governed by SLOP-K005 and does not fire here."
+profiles = { default = "apply", commit-message = { subject = "apply", body = "apply", trailers = "off" } }
+
+[[rule]]
+id = "SLOP-S002"
+name = "verdict-heading"
+family = "signature"
+tier = "violation"
+lifecycle = "blocking"
+origin = "incident"
+view = "prose"
+match = { kind = "regex-set", scope = "heading" }
+patterns = ['(?i)^(impact|severity|risk|recommended fix|recommendation|conclusion)s?\b']
+guard = "Headings only. The bug-report profile bans verdict headings because they draw the conclusion for the maintainer. Other profiles allow these headings and the rule is off there."
+profiles = { default = "off", public-bug-report = "apply" }
+
+[[rule]]
+id = "SLOP-S003"
+name = "closing-pleasantry"
+family = "signature"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/pleasantries.txt", case = "insensitive", boundary = "none" }
+guard = "Prose only. A quoted example of a pleasantry inside code formatting is excluded by segmentation."
+profiles = { default = "apply", internal-doc = "relax" }
+
+# ---------------------------------------------------------------------------
+# Family V: assistant voice
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-V001"
+name = "model-self-disclosure"
+family = "assistant-voice"
+tier = "violation"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/cutoff-disclaimers.txt", case = "insensitive", boundary = "none" }
+guard = "Knowledge-cutoff and model self-description phrases have no legitimate use in committed text. Quoting one as a fixture belongs in code formatting, which is excluded by segmentation."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-V002"
+name = "assistant-register"
+family = "assistant-voice"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/assistant-voice.txt", case = "insensitive", boundary = "none" }
+guard = "A human replying in a live thread can use these phrases sincerely. The trigger is their appearance in a durable artifact where no conversation exists."
+judge = "Is there an actual conversational counterpart in this artifact, or is this chat residue?"
+profiles = { default = "apply", internal-doc = "relax" }
+
+[[rule]]
+id = "SLOP-V003"
+name = "assistant-offer"
+family = "assistant-voice"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/assistant-offers.txt", case = "insensitive", boundary = "none" }
+guard = "Offering follow-up is normal in correspondence. In a bug report, commit, or doc it is turn-taking residue from a chat transcript."
+judge = "Who is the offer addressed to, and can they answer in this medium?"
+profiles = { default = "apply", internal-doc = "relax" }
+
+# ---------------------------------------------------------------------------
+# Family T: filler and transitions
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-T001"
+name = "filler-meta"
+family = "filler"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/filler-meta.txt", case = "insensitive", boundary = "word" }
+guard = "The overall entry fires only at block start. Essentially and at its core fire everywhere. Safety-critical warnings do not need these markers, they need the concrete consequence stated."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-T002"
+name = "transition-tic-opener"
+family = "filler"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/transition-openers.txt", case = "insensitive", boundary = "word", position = "block-start" }
+guard = "Block-start position only. Mid-sentence use does not fire. A connector passes when the two propositions have the stated logical relation, for example a real adversative for that said or a valid entailment for as such."
+judge = "Does the connector express a real logical relation or supply cadence?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-T003"
+name = "audience-runway"
+family = "filler"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/audience-runway.txt", case = "insensitive", boundary = "none" }
+guard = "Deliberately conversational tutorial or workshop material may keep some of these. Bug reports, commits, changelogs, and reference docs may not."
+judge = "Is this artifact a tutorial whose register is intentionally conversational?"
+profiles = { default = "apply", internal-doc = "relax" }
+
+# ---------------------------------------------------------------------------
+# Family I: intensifiers and hype
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-I001"
+name = "vague-intensifier"
+family = "intensifier"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/intensifiers.txt", case = "insensitive", boundary = "word" }
+guard = "The fixed technical collocations highly available, highly composite, and highly connected are exempt. Quoted text is handled by the quotation downgrade."
+profiles = { default = "apply" }
+[rule.exemptions]
+highly = ["highly available", "highly composite", "highly connected"]
+
+[[rule]]
+id = "SLOP-I002"
+name = "importance-inflation"
+family = "intensifier"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/importance-adjectives.txt", case = "insensitive", boundary = "word" }
+guard = "Exempt in fixed technical senses: critical section, critical path, significant figures, statistical significance reported with the test and effect size, and severity labels quoted from an external taxonomy. Elsewhere the word ranks the claim instead of stating the consequence."
+profiles = { default = "relax", public-bug-report = "apply" }
+[rule.exemptions]
+critical = ["critical section", "critical sections", "critical path", "critical paths"]
+significant = ["significant figures", "statistically significant"]
+
+[[rule]]
+id = "SLOP-I003"
+name = "hype-adjective"
+family = "intensifier"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/hype-adjectives.txt", case = "insensitive", boundary = "word" }
+guard = "Retain only when the adjective names a defined property with evidence nearby: a benchmark against named baselines for state-of-the-art, a readiness checklist for production-ready, a usability study for intuitive, robust statistics as a formal term. Bare use is decoration."
+judge = "Is the adjective backed by a named measurement, standard, or formal term next to it?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-I004"
+name = "unquantified-magnitude"
+family = "intensifier"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/magnitude-claims.txt", case = "insensitive", boundary = "word" }
+guard = "Passes when the actual number, delta, baseline, or comparison class appears in the same or adjacent sentence. Exponentially passes only for a real exponential relationship. Orders of magnitude passes when the compared values show it."
+judge = "Where is the number?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-I005"
+name = "empty-qualifier"
+family = "intensifier"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/empty-qualifiers.txt", case = "insensitive", boundary = "word" }
+guard = "A hedge passes when uncertainty is real and the basis for it is stated, for example a suspected cause pending confirmation. It fails when it dilutes a checkable statement."
+judge = "Is the uncertainty real and grounded, or is the hedge reflexive?"
+profiles = { default = "apply", internal-doc = "relax" }
+
+# ---------------------------------------------------------------------------
+# Family C: contrast rhetoric
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-C001"
+name = "negated-parallel-contrast"
+family = "contrast"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['(?i)\bnot only\b.{1,160}\bbut also\b', '(?i)\bnot just\b.{1,160}\bbut\b', '(?i)\bnot (merely|simply)\b.{1,160}\bbut\b', '(?i)\bnot because\b.{1,180}\bbut because\b', '(?i)\bnot\b.{1,70},\s{0,8}not\b.{1,70},\s{0,8}but\b', '(?i)\bnot despite\b.{1,160}\bbut because of\b']
+guard = "Passes when the rejected half was actually asserted earlier, in the thread, or in a quoted claim, or when both halves are independent obligations that must both be stated."
+judge = "Rule 4 test: did anyone propose the rejected alternative, or was it invented to stage the reveal?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-C002"
+name = "reframing-skeleton"
+family = "contrast"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['(?i)\b(it|this|that) (is|was) not\b.{1,100}[;:.]\s{0,8}(it|this|that)?\s{0,8}(is|was)\b', "(?i)\\bthe (point|issue|problem|question|goal) (isn't|is not|wasn't|was not)\\b", '(?i)\bless about\b.{1,120}\bmore about\b', '(?i)\bnot so much\b.{1,120}\bas\b', '(?i)(^|[.!?]\s{1,8})far from\b.{1,120}[,;:]', '(?i)(^|[.!?]\s{1,8})if anything,', '(?i)\bcontrary to (popular belief|expectations?|conventional wisdom)\b']
+guard = "Passes when correcting a documented misconception, a quoted claim, or a scope dispute where both formulations are on the record."
+judge = "Rule 4 test: fact about the subject, or staging about the document?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-C003"
+name = "unproposed-alternative"
+family = "contrast"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['(?i)\brather than\b', '(?i)(^|[.!?]\s{1,8})instead of\b.{1,120}[,;:]', '(?im)^\s{0,8}instead,\s', '(?im)^\s{0,8}rather,\s', '(?i)\brather than (simply|merely|just)\b']
+guard = "Passes for concrete alternatives the text introduced, for example returns 404 rather than 500, migration before-and-after, or an evaluated and rejected design. Fails when the reader never proposed the rejected path."
+judge = "Was the alternative on the table before this sentence?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-C004"
+name = "staged-concession"
+family = "contrast"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['(?im)^\s{0,8}(while|although|though)\b.{1,160},', '(?i)(^|[.!?]\s{1,8})(yes|admittedly|sure|granted|of course),?\s{1,8}.{1,140}\bbut\b', '(?i)\b(may|might|could) be (true|correct|valid),?\s{1,8}but\b']
+guard = "Passes when the conceded point is a real recorded objection or a genuine limitation of the claim. Temporal while and concurrency descriptions never fire."
+judge = "Who raised the conceded point?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-C005"
+name = "rule-of-three-padding"
+family = "contrast"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['(?i)\b(fast(er)?|clean(er)?|simple[r]?|safe[r]?|easi(er|est)|robust|flexible|scalable|maintainable|reliable|efficient|seamless|intuitive|powerful)\b[^.!?]{0,60},\s{0,8}[^.!?]{0,60},?\s{0,8}(and|or)\s{1,8}[^.!?]{0,60}\b(fast(er)?|clean(er)?|simple[r]?|safe[r]?|robust|flexible|scalable|maintainable|reliable|efficient|seamless|intuitive|powerful)\b', '(?i)\bwhether\b.{1,60},\s{1,8}.{1,60},\s{1,8}or\s{1,8}', '(?i)\bfrom\b.{1,60}\bto\b.{1,60}\bto\b', '(?i)and everything in between', '(?i),\s{1,8}(and|or)\s{1,8}[^.!?]{1,60},\s{1,8}(making|ensuring|allowing|helping)\b']
+guard = "Passes for real enumerations: ordered procedures, exhaustive branches, supported configurations, or three separately evidenced properties. Fails when the triplet restates one virtue three ways."
+judge = "Do the three items carry three distinct checkable facts?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-C006"
+name = "balance-scaffolding"
+family = "contrast"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['(?i)\bon (the )?one hand\b.{1,500}\bon the other( hand)?\b', '(?i)\bthe (good|bad) news is\b', '(?i)\b(simple|easy|lightweight|minimal),?\s{1,8}(but|yet)\s{1,8}(powerful|robust|flexible|comprehensive)\b', '(?i)\bbest of both worlds\b', '(?i)\bwithout sacrificing\b', '(?i)\bno compromises?\b', '(?i)\bno one-size-fits-all\b', '(?i)\bno silver bullet\b', '(?i)\bstrikes? a( delicate| careful)? balance\b', '(?i)\ball while\b']
+guard = "Passes in a decision record with two named alternatives and their consequences, or when a preserved property is separately measured. Fails as a stock paradox or an unweighed tradeoff gesture."
+judge = "Are both sides named, weighed, and evidenced?"
+profiles = { default = "apply" }
+
+# ---------------------------------------------------------------------------
+# Family Q: rhetorical questions
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-Q001"
+name = "rhetorical-question"
+family = "rhetorical-question"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "regex-set" }
+patterns = ['(?i)(^|[.!?]\s{1,8})so,?\s{1,8}what does (this|that|it) mean\?', '(?i)\bwhy does (this|that|it) matter\?', "(?i)\\bwhat('s| is) the (key )?(takeaway|bottom line)\\?", '(?i)\bthe (answer|result|catch|problem|benefit|key)\?\s{1,8}', '(?i)\bcan we\b.{0,80}\?\s{0,8}(yes|absolutely|of course)\b', '(?i)\bis\b.{1,80}\?\s{0,8}(no|not quite|of course not)\b', '(?i)\bready to\b.{1,80}\?', '(?i)\b(sounds|seems) (simple|easy|good|great),?\s{1,8}right\?', "(?i)\\b(who wouldn't|why wouldn't|isn't it|doesn't everyone)\\b.{0,80}\\?"]
+guard = "Question headings in FAQ or troubleshooting formats pass. A self-answered question in running prose is presenter cadence and fails."
+judge = "Is the question a document format element or a staged beat?"
+profiles = { default = "apply" }
+
+# ---------------------------------------------------------------------------
+# Family E: emphasis staging
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-E001"
+name = "emphasis-staged-contrast"
+family = "emphasis"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "prose"
+match = { kind = "structural", params = { emphasized_words = ["do", "does", "did", "is", "are", "was", "were", "can", "will", "not", "never", "no", "only", "just", "simply", "actually", "really", "this", "that", "it"], followed_within = 120, followed_by = ["but", "however", "yet", "instead", "rather"] } }
+guard = "Uses the parser's emphasis events, never literal asterisks, so code and glob syntax cannot fire. Passes when correcting a specific quoted false claim or marking a safety boundary."
+judge = "Rule 4 test: is the emphasis about the defect or about how the sentence lands?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-E002"
+name = "insistence-formatting"
+family = "emphasis"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "prose"
+match = { kind = "regex-set" }
+patterns = ['\b(DOES|DID|IS|ARE|NOT|NEVER)\b', '(?i)\((yes|no),?\s{1,8}really\)']
+guard = "RFC-style normative keywords MUST, SHOULD, MAY, SHALL and their negations are exempt, as are environment variables, constants, and quoted UI labels. All-caps insistence outside those is vocal staging."
+judge = "Is the capitalized token a normative keyword or identifier, or spoken stress?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-E003"
+name = "bold-label-list"
+family = "emphasis"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "prose"
+match = { kind = "structural", params = { list_items_with_leading_bold_label = 3 } }
+guard = "Three or more list items opening with a bold token and a colon. Passes when the labels are field names, API identifiers, or a definition list. Fails when the labels are abstract virtues."
+judge = "Are the bold labels identifiers or virtues?"
+profiles = { default = "apply", internal-doc = "relax" }
+
+# ---------------------------------------------------------------------------
+# Family R: reassurance
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-R001"
+name = "unsolicited-reassurance"
+family = "reassurance"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/reassurance.txt", case = "insensitive", boundary = "none" }
+guard = "Passes only when it answers a concern actually present in the surrounding artifact and is followed by a verifiable status, owner, or guarantee."
+judge = "Rule 4 test: who asked to be reassured?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-R002"
+name = "preempted-objection"
+family = "reassurance"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/clarity-meta.txt", case = "insensitive", boundary = "none" }
+guard = "Passes after an actual ambiguity, correction request, or disputed interpretation on the record. For the avoidance of doubt passes in contract or policy text where it carries formal force."
+judge = "Rule 4 test: was the objection raised, or invented to be dismissed?"
+profiles = { default = "apply", internal-doc = "relax" }
+
+# ---------------------------------------------------------------------------
+# Family F: process facts (core rules 1 and 2 triggers)
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-F001"
+name = "first-person-marker"
+family = "process-facts"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/first-person.txt", case = "insensitive", boundary = "word" }
+guard = "The trigger is presence, the rule is core rule 1. Reproduction narration in a bug report can be legitimate. Statements about how we produced or checked the finding are not."
+judge = "Core rule 1 test: fact about the subject or fact about us?"
+profiles = { default = "apply", readme = "relax", changelog = "relax", release-notes = "relax", commit-message = "relax", internal-doc = "off" }
+
+[[rule]]
+id = "SLOP-F002"
+name = "verification-claim"
+family = "process-facts"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/verification-claims.txt", case = "insensitive", boundary = "none" }
+guard = "Steps that a reader can rerun are content. Claims about our reviewers, tooling, or diligence are core rule 1 breaches. Reproduced passes when it introduces a runnable reproduction."
+judge = "Core rule 1 test: does this describe the defect or our process?"
+profiles = { default = "apply", internal-doc = "off" }
+
+[[rule]]
+id = "SLOP-F003"
+name = "impact-framing"
+family = "process-facts"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/impact-framing.txt", case = "insensitive", boundary = "none" }
+guard = "Stating the mechanism, including what input reaches what code, is content. Ranking the consequence for the maintainer is core rule 2. Severity vocabulary quoted from an external advisory passes."
+judge = "Core rule 2 test: mechanism, or conclusion drawn for the people who built it?"
+profiles = { default = "apply", internal-doc = "off" }
+
+# ---------------------------------------------------------------------------
+# Family O: framing lexicon
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-O001"
+name = "significance-inflation"
+family = "framing"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/significance-inflation.txt", case = "insensitive", boundary = "none" }
+guard = "Passes only when a required dependency and its concrete failure consequence are stated, which almost never needs these phrases."
+judge = "What breaks without it, stated where?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-O002"
+name = "copula-avoidance"
+family = "framing"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/copula-avoidance.txt", case = "insensitive", boundary = "none" }
+guard = "Acts as and functions as are precise for adapters, bridges, and proxies and pass there. The tic is systematic substitution where is or has would do, so weight rises with repetition."
+judge = "Would is or has lose information here?"
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-O003"
+name = "stock-opener"
+family = "framing"
+tier = "violation"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/stock-openers.txt", case = "insensitive", boundary = "none" }
+guard = "These openers have no recorded legitimate use in technical artifacts. Quoting one as an example belongs in code formatting, which is excluded by segmentation."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-O004"
+name = "vague-attribution"
+family = "framing"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/vague-attribution.txt", case = "insensitive", boundary = "none" }
+guard = "Passes when a named citation, dataset, count, or dated source immediately follows. Fails as a floating consensus claim."
+judge = "Name the study, the population, or the count."
+profiles = { default = "apply", internal-doc = "relax" }
+
+# ---------------------------------------------------------------------------
+# Family D: density
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-D001"
+name = "lexicon-density"
+family = "density"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "ratio", params = { count_rules = ["SLOP-A001", "SLOP-A003", "SLOP-I003", "SLOP-O001", "SLOP-O002"], threshold = 3, per_words = 500 } }
+guard = "Fires as an escalation flag directing the judge to whole-document review, on top of the individual hits. It never substitutes for them."
+judge = "The document as a whole reads generated. Review register, not just spans."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-D002"
+name = "bullet-link-density"
+family = "density"
+tier = "candidate"
+lifecycle = "experimental"
+origin = "research"
+view = "prose"
+match = { kind = "ratio", params = { min_bullets = 8, min_link_bullet_pct = 60 } }
+guard = "Reference sections, link roundups, and dependency lists are legitimate. The signal is an argument delivered as a wall of linked bullets."
+judge = "Is this a reference list or a substitute for prose reasoning?"
+profiles = { default = "apply", internal-doc = "off" }
+
+[[rule]]
+id = "SLOP-D003"
+name = "paragraph-uniformity"
+family = "density"
+tier = "coverage_hint"
+lifecycle = "advisory"
+origin = "research"
+view = "prose"
+match = { kind = "ratio", params = { min_paragraphs = 5, max_length_cv_pct = 20 } }
+guard = "Low variance in paragraph length across five or more paragraphs is a weak generation signal. Hint only, never gates."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-D004"
+name = "opener-density"
+family = "density"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "norm"
+match = { kind = "ratio", params = { count_rules = ["SLOP-T002"], threshold = 3, per_document = true } }
+guard = "Three or more block-start transition tics in one document is essay cadence. Formal proofs where each connector is logically exact pass."
+judge = "Is each connector doing logical work?"
+profiles = { default = "apply" }
+
+# ---------------------------------------------------------------------------
+# Family X: structural fingerprints
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-X001"
+name = "boilerplate-skeleton"
+family = "structural"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "prose"
+match = { kind = "structural", params = { heading_set = ["summary", "overview", "key changes", "changes", "benefits", "test plan", "testing", "next steps"], min_matches = 3 } }
+guard = "A repo template that mandates these sections passes when the template is in the repo. The trigger is the stock chat-output heading skeleton; checkmark bullets are caught independently by SLOP-M006 emoji-in-prose (this rule declares no checkmark_bullets param of its own)."
+judge = "Is this the project's template or the tool's?"
+profiles = { default = "off", public-bug-report = "apply", readme = "relax" }
+
+[[rule]]
+id = "SLOP-X002"
+name = "bullet-heavy-commit-body"
+family = "structural"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "research"
+view = "prose"
+match = { kind = "ratio", params = { min_body_lines = 10, min_bullet_line_pct = 50 } }
+guard = "A long multi-bullet commit body is the single strongest generation signal in commit data. A genuine squash commit enumerating real distinct changes passes."
+judge = "Do the bullets map to distinct changes in the diff?"
+profiles = { default = "off", commit-message = "apply" }
+
+[[rule]]
+id = "SLOP-X003"
+name = "oversized-body"
+family = "structural"
+tier = "candidate"
+lifecycle = "experimental"
+origin = "research"
+view = "prose"
+match = { kind = "ratio", params = { max_words = { public-bug-report = 1200, commit-message = 300, changelog = 2000 } } }
+guard = "Long documents are sometimes necessary. The signal is length combined with the other density families, so this rule reports and defers to the judge."
+judge = "Is the length carrying content or volume?"
+profiles = { default = "off", public-bug-report = "apply", commit-message = "apply" }
+
+[[rule]]
+id = "SLOP-X004"
+name = "over-structured-short-doc"
+family = "structural"
+tier = "candidate"
+lifecycle = "experimental"
+origin = "research"
+view = "prose"
+match = { kind = "ratio", params = { max_words = 300, min_headings = 4 } }
+guard = "A short document with four or more headings is presentation scaffolding. Index pages and FAQ stubs pass."
+judge = "Is the structure serving navigation or performance?"
+profiles = { default = "apply", internal-doc = "off" }
+
+# ---------------------------------------------------------------------------
+# Family W: scrub words
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-W001"
+name = "scrub-words"
+family = "scrub"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "word-set", lexicon = "words/scrub.txt", case = "insensitive", boundary = "word" }
+guard = "Public-surface profiles only. Port is exempt when adjacent to a number or to serial, network, tcp, udp, listening, or bind. Terms inside code spans, crate names, and identifiers are excluded by segmentation. The list is deployment policy data."
+profiles = { default = "apply", internal-doc = "off" }
+[rule.exemptions]
+port = ["port number", "serial port", "network port", "tcp port", "udp port", "listening port", "bind port", "port 0", "port 1", "port 2", "port 3", "port 4", "port 5", "port 6", "port 7", "port 8", "port 9"]
+
+# ---------------------------------------------------------------------------
+# Family J: injection
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-J001"
+name = "injection-pattern"
+family = "injection"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "incident"
+waiver = "human-only"
+view = "raw"
+match = { kind = "word-set", lexicon = "words/injection.txt", case = "insensitive", boundary = "none" }
+guard = "Scans every view including code regions and HTML comments, because injection hides in excluded regions. A hit flips the run to adversarial mode: all candidates go to a human or the run fails closed. Never demotable, never agent-waivable."
+judge = "None. Presence forces human adjudication."
+profiles = { default = "apply" }
+
+# ---------------------------------------------------------------------------
+# Family G: code comments (api-docs profile)
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-G001"
+name = "comment-restates-code"
+family = "code-comment"
+tier = "candidate"
+lifecycle = "experimental"
+origin = "research"
+view = "prose"
+match = { kind = "word-set", words = ["here we", "now we", "this function simply", "this method simply", "as you can see", "increment", "decrement", "loop over", "loop through"], case = "insensitive", boundary = "none", scope = "comment" }
+guard = "Comment text only, in the api-docs profile. A comment that explains why passes. A comment that narrates what the adjacent code visibly does fails."
+judge = "Does the comment add information the code does not carry?"
+profiles = { default = "off", api-docs = "apply" }
+
+[[rule]]
+id = "SLOP-G002"
+name = "unjustified-compat-marker"
+family = "code-comment"
+tier = "candidate"
+lifecycle = "experimental"
+origin = "research"
+view = "prose"
+match = { kind = "word-set", words = ["for backwards compatibility", "for backward compatibility", "legacy support", "just in case", "to be safe", "ignore errors", "swallow the error"], case = "insensitive", boundary = "none", scope = "comment" }
+guard = "Comment text only, in the api-docs profile. On code with real history these can be true. On new code they are generated cruft markers."
+judge = "Is there a prior version this compatibility claim refers to?"
+profiles = { default = "off", api-docs = "apply" }
+
+# ---------------------------------------------------------------------------
+# Family K: profile contract rules
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-K001"
+name = "bug-report-title"
+family = "profile-contract"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "raw"
+match = { kind = "structural", params = { max_title_chars = 80, forbid_title_words = ["impact", "severity", "critical", "urgent", "remediation"] } }
+guard = "Title is the first heading or the first line. Single-defect is checked as no top-level and joining two verb clauses. Identifiers containing forbidden substrings do not fire."
+profiles = { default = "off", public-bug-report = "apply" }
+
+[[rule]]
+id = "SLOP-K002"
+name = "commit-subject-format"
+family = "profile-contract"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "raw"
+match = { kind = "structural", params = { conventional_prefix = true, imperative_lowercase = true, no_trailing_period = true, max_subject_chars = 72 } }
+guard = "Subject line only. Proper nouns and identifiers keep their case after the colon. The imperative check is a heuristic on the first word and reports candidate, the other three checks are exact."
+profiles = { default = "off", commit-message = "apply" }
+
+[[rule]]
+id = "SLOP-K003"
+name = "changelog-structure"
+family = "profile-contract"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "prose"
+match = { kind = "structural", params = { section_whitelist = ["fixed", "changed", "added", "removed", "performance", "documentation", "security"], dated_heading = true } }
+guard = "Heading names outside the whitelist fire. The one-bullet-per-change and issue-ref checks report candidate since they need reading, the whitelist and date checks are exact."
+profiles = { default = "off", changelog = "apply", release-notes = "apply" }
+
+[[rule]]
+id = "SLOP-K004"
+name = "release-notes-body"
+family = "profile-contract"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "raw"
+match = { kind = "structural", params = { expected_body_from_config = true, max_extra_pointer_lines = 1 } }
+guard = "When configuration supplies the changelog entry for the version, the body must equal it plus at most one pointer line. Without that input the rule emits a coverage hint naming what it could not check."
+profiles = { default = "off", release-notes = "apply" }
+
+[[rule]]
+id = "SLOP-K005"
+name = "readme-license-section"
+family = "profile-contract"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "prose"
+match = { kind = "structural", params = { required_heading = "license", expected_wording_from_config = true } }
+guard = "The License section is mandatory in the readme profile, with exact expected wording supplied by configuration. Absent configuration, presence of the heading is checked and wording is a coverage hint."
+profiles = { default = "off", readme = "apply" }
+
+[[rule]]
+id = "SLOP-K006"
+name = "cargo-metadata-fields"
+family = "profile-contract"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "raw"
+match = { kind = "structural", params = { description_required = true, max_description_chars = 160, keywords_exact = 5, categories_min = 2, categories_max = 3, forbid_brand_prefix = true } }
+guard = "Applies to the manifest package fields in the cargo-metadata profile. The description is also run through the prose rule set."
+profiles = { default = "off", cargo-metadata = "apply" }
+
+[[rule]]
+id = "SLOP-K007"
+name = "readme-version-agreement"
+family = "profile-contract"
+tier = "violation"
+lifecycle = "blocking"
+origin = "harvest"
+view = "raw"
+match = { kind = "structural", params = { expected_version_from_config = true } }
+guard = "When configuration supplies the expected version, every version string in dependency snippets must match it. Without that input the rule emits a coverage hint listing the version strings found."
+profiles = { default = "off", readme = "apply" }
+
+[[rule]]
+id = "SLOP-K008"
+name = "unverified-behavioral-claim"
+family = "profile-contract"
+tier = "candidate"
+lifecycle = "blocking"
+origin = "harvest"
+view = "norm"
+match = { kind = "word-set", words = ["guarantees", "guaranteed", "never panics", "cannot fail", "always returns", "thread-safe", "lock-free", "zero-cost", "zero-copy", "no allocations", "allocation-free", "constant-time"], case = "insensitive", boundary = "none" }
+guard = "These claims are legitimate exactly when backed. The judge checks that a doctest, test, or proof reference exists for each. Formal terms used with their definitions pass."
+judge = "Where is the doctest or test that backs this claim?"
+profiles = { default = "off", readme = "apply", api-docs = "apply", cargo-metadata = "apply" }
+
+# ---------------------------------------------------------------------------
+# Family Y: rendered view
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-Y001"
+name = "render-invisible-content"
+family = "rendered-view"
+tier = "violation"
+lifecycle = "blocking"
+origin = "owner-mandate"
+view = "rendered"
+match = { kind = "structural", params = { html_comment_min_text_chars = 1, dropped_raw_html_text = true, unused_link_definitions_with_prose = true } }
+guard = "Text present in source but absent from the locally computed render is an evasion and injection channel. Empty comments and well-known marker comments listed in configuration, for example markdownlint directives, are exempt."
+profiles = { default = "apply", commit-message = "off", cargo-metadata = "off" }
+
+[[rule]]
+id = "SLOP-Y002"
+name = "render-divergence"
+family = "rendered-view"
+tier = "candidate"
+lifecycle = "experimental"
+origin = "owner-mandate"
+view = "rendered"
+match = { kind = "structural", params = { compare = "norm-vs-rendered-text", ignore = ["markup", "whitespace"] } }
+guard = "Reports places where the rendered text differs from the norm view beyond markup removal, for example image alt text carrying prose or reference-link text swaps. Ordinary markdown formatting differences never fire."
+judge = "Does the reader of the rendered page see what the source review saw?"
+profiles = { default = "apply", commit-message = "off", cargo-metadata = "off" }
+
+# ---------------------------------------------------------------------------
+# Family H: coverage hints
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "SLOP-H001"
+name = "section-map"
+family = "coverage"
+tier = "coverage_hint"
+lifecycle = "advisory"
+origin = "incident"
+view = "prose"
+match = { kind = "structural", params = { emit = "heading-tree-with-byte-ranges" } }
+guard = "Instrumentation output, always emitted."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-H002"
+name = "segmentation-residue"
+family = "coverage"
+tier = "coverage_hint"
+lifecycle = "advisory"
+origin = "incident"
+view = "raw"
+match = { kind = "structural", params = { emit = "excluded-bytes-by-reason", flag_excluded_pct = 40 } }
+guard = "A high excluded ratio means most of the document escaped prose analysis and deserves a human glance."
+profiles = { default = "apply" }
+
+[[rule]]
+id = "SLOP-H003"
+name = "encoding-oddities"
+family = "coverage"
+tier = "coverage_hint"
+lifecycle = "advisory"
+origin = "incident"
+view = "raw"
+match = { kind = "structural", params = { mixed_line_endings = true, bom_stripped = true, unusual_scripts_in_identifierlike_prose = true } }
+guard = "Worth a human glance. Never gates alone. Unusual-scripts hint: a mixed-script token - Latin letters sharing a word with a cross-script homoglyph - is surfaced here, while the norm-view homoglyph fold makes the lexicon rules fire on the folded word."
+profiles = { default = "apply" }

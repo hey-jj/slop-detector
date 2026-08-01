@@ -1,0 +1,26 @@
+# SLOP-F002 verification and process claims. Candidate tier.
+confirmed
+verified
+double-checked
+triple-checked
+re-verified
+second reviewer
+independent reviewer
+was reviewed
+has been reviewed
+peer-reviewed
+thoroughly analyzed
+i have thoroughly analyzed
+carefully analyzed
+after extensive analysis
+extensive testing confirmed
+our analysis
+our audit
+our review
+our testing
+our tooling
+our pipeline
+our harness
+our reviewers
+automated analysis
+confirmed by

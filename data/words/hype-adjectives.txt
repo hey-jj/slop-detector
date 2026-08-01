@@ -1,0 +1,61 @@
+# SLOP-I003 hype adjectives with a possible technical or evidenced sense. Candidate tier.
+powerful
+innovative
+elegant
+intuitive
+user-friendly
+developer-friendly
+effortless
+frictionless
+state-of-the-art
+sleek
+beautiful
+beautifully
+delightful
+sophisticated
+feature-rich
+feature-packed
+enterprise-grade
+enterprise-ready
+industrial-strength
+military-grade
+bank-grade
+battle-tested
+production-ready
+time-tested
+rock-solid
+bulletproof
+foolproof
+flawless
+flawlessly
+blazingly fast
+blazing fast
+lightning-fast
+ultra-fast
+turnkey
+plug-and-play
+best-of-breed
+top-tier
+top-notch
+industry-leading
+market-leading
+unparalleled
+unmatched
+unrivaled
+second to none
+peerless
+premier
+first-class
+versatile
+meticulously
+meticulous
+carefully crafted
+meticulously crafted
+thoughtfully designed
+purpose-built
+tailor-made
+finely tuned
+proven track record
+one-stop shop
+swiss army knife
+batteries included

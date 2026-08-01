@@ -1,0 +1,27 @@
+# SLOP-F003 impact and verdict framing. Candidate tier.
+severe
+severity
+urgent
+urgently
+impact
+high-impact
+critical vulnerability
+the only fix
+the only solution
+must be fixed
+must be addressed
+should be prioritized
+attackers can
+an attacker can easily
+exploit this in the wild
+exploitable
+attack surface
+remediation
+recommended fix
+we recommend
+cvss
+worst-case scenario
+data loss is likely
+production outage
+immediately
+as soon as possible

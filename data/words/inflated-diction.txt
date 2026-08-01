@@ -1,0 +1,18 @@
+# SLOP-A004 inflated-diction set. Candidate tier. Curated tightly: only
+# near-certain inflated substitutions, because the failure mode of this rule
+# is flooding dense legitimate technical prose. The leverage verb family is
+# already in words/ornamental.txt (SLOP-A001) and is not repeated here.
+utilize
+utilizes
+utilized
+utilizing
+utilization
+facilitate
+facilitates
+facilitated
+facilitating
+operationalize
+operationalizes
+operationalized
+operationalizing
+aforementioned

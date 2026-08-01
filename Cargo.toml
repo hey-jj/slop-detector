@@ -1,0 +1,46 @@
+[package]
+name = "slop-detector"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Detects chatbot paste residue, injection phrasing, and formulaic-writing patterns in received text"
+keywords = ["detector", "text", "patterns", "email", "cli"]
+categories = ["command-line-utilities", "text-processing"]
+readme = "README.md"
+repository = "https://github.com/hey-jj/slop-detector"
+include = [
+    "src/**",
+    "data/**",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+]
+
+[dependencies]
+aho-corasick = "1.1"
+regex-automata = { version = "0.4", default-features = false, features = [
+    "std",
+    "syntax",
+    "dfa-build",
+    "dfa-search",
+    "hybrid",
+    "perf-inline",
+    "unicode-bool",
+    "unicode-case",
+    "unicode-perl",
+] }
+regex-syntax = { version = "0.8", default-features = false, features = [
+    "std",
+    "unicode",
+] }
+unicode-ident = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+lexopt = "0.3"
+
+[[bin]]
+name = "slop-detector"
+path = "src/bin/slop-detector.rs"

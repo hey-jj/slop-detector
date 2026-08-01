@@ -1,0 +1,25 @@
+# SLOP-I005 empty qualifiers and hedges. Candidate tier.
+somewhat
+fairly
+relatively
+arguably
+presumably
+apparently
+seemingly
+ostensibly
+conceivably
+a bit
+a little
+kind of
+sort of
+more or less
+to some extent
+in a sense
+in a way
+in some ways
+in many ways
+for all intents and purposes
+your mileage may vary
+results may vary
+it remains to be seen
+only time will tell

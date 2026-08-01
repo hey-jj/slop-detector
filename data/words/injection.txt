@@ -1,0 +1,24 @@
+# SLOP-J001 injection patterns. Candidate tier, forces adversarial mode.
+# This family is never demotable and never agent-waivable.
+ignore previous instructions
+ignore all previous instructions
+ignore the above instructions
+disregard previous instructions
+disregard the above
+forget your instructions
+new instructions:
+system prompt
+developer prompt
+you are an ai
+you are a helpful assistant
+you are now
+act as an unrestricted
+respond only with
+do not tell the user
+hidden instruction
+begin system prompt
+end system prompt
+<system>
+[system]
+jailbreak
+dan mode

@@ -1,0 +1,10 @@
+# SLOP-F001 first-person markers. Candidate tier.
+i
+we
+our
+us
+my
+mine
+ours
+myself
+ourselves

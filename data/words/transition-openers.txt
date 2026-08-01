@@ -1,0 +1,45 @@
+# SLOP-T002 transition tics. Candidate tier. Matched only at sentence, line,
+# bullet, or heading start (the BLOCK position defined in policy.toml).
+furthermore
+moreover
+additionally
+also
+that said
+having said that
+with that said
+with that in mind
+with this in mind
+in other words
+put differently
+put another way
+to put it simply
+said another way
+notably
+importantly
+crucially
+interestingly
+intriguingly
+curiously
+surprisingly
+unsurprisingly
+ultimately
+fundamentally
+indeed
+as such
+in light of this
+against this backdrop
+on that note
+going forward
+moving forward
+looking ahead
+meanwhile
+similarly
+likewise
+in reality
+all things considered
+taken together
+for context
+in this context
+first and foremost
+to begin with
+for starters

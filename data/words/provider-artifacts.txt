@@ -1,0 +1,23 @@
+# SLOP-P002 chat-export citation and file artifacts. Blocking set.
+# Matching: literal substring, case-sensitive, all views including raw.
+contentReference
+oaicite
+citeturn
+turn0search
+turn0news
+turn0image
+turn1search
+turn2search
+filecite
+videocite
+navlist
+iturn0
+[cite:
+[span_
+grok_card
+grok_render_citation_card_json
+render_inline_citation
+ppl-ai-file-upload
+sandbox:/mnt/data
+files.oaiusercontent.com
+chatgpt.com/backend-api

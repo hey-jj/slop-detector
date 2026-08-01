@@ -1,0 +1,22 @@
+# SLOP-P002 chat-export citation and file artifacts, inbound copy.
+# Matching: literal substring, case-sensitive.
+# Edits against the vendored words/provider-artifacts.txt:
+#   - the literal turn0search/turn0news/turn0image/turn1search/turn2search
+#     entries are removed; the SD-R001 turn-marker regex supersedes them
+#   - files.oaiusercontent.com is widened to oaiusercontent.com
+contentReference
+oaicite
+citeturn
+filecite
+videocite
+navlist
+iturn0
+[cite:
+[span_
+grok_card
+grok_render_citation_card_json
+render_inline_citation
+ppl-ai-file-upload
+sandbox:/mnt/data
+oaiusercontent.com
+chatgpt.com/backend-api

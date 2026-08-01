@@ -1,0 +1,39 @@
+# SD-Q002 participial-opener stop-list. Capitalized -ing words at sentence
+# start that are NOT the instruction-tuned participial-clause pattern.
+# Two groups. Non-participial lookalikes (nouns, pronouns, prepositions):
+during
+something
+anything
+everything
+nothing
+morning
+evening
+spring
+sterling
+darling
+sibling
+ceiling
+meaning
+feeling
+string
+thing
+king
+ring
+wedding
+meeting
+briefing
+opening
+warning
+finding
+findings
+# Conversational email idioms that are participial in form but ordinary
+# human correspondence openers (FP-conservative for inbound):
+following
+regarding
+concerning
+moving
+going
+looking
+speaking
+starting
+continuing

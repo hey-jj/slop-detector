@@ -1,0 +1,111 @@
+# SLOP-A001 ornamental lexicon. Blocking set. One term per line, lowercase.
+# Matching: case-insensitive, word-boundary anchored, phrases allowed, prose view.
+delve
+delves
+delving
+delved
+game-changer
+game changer
+game-changing
+game changing
+tapestry
+testament
+paradigm shift
+paradigm-shifting
+seamless
+seamlessly
+robust
+robustly
+leverage
+leverages
+leveraged
+leveraging
+elevate
+elevates
+elevating
+unlock
+unlocks
+unlocking
+unleash
+unleashes
+unleashing
+unleashed
+foster
+fosters
+fostering
+myriad
+plethora
+cornucopia
+treasure trove
+wealth of
+beacon
+bedrock
+linchpin
+crucible
+mosaic
+symphony
+odyssey
+embark
+embarks
+embarking
+epitome
+hallmark
+cornerstone
+nexus
+uncharted territory
+brave new world
+new frontier
+dawn of a new
+usher in
+ushers in
+ushering in
+a new era
+pave the way
+paves the way
+paving the way
+tip of the iceberg
+bridge the gap
+revolutionize
+revolutionizes
+revolutionizing
+revolutionary
+transformative
+groundbreaking
+trailblazing
+cutting-edge
+cutting edge
+world-class
+best-in-class
+future-proof
+next-generation
+next-gen
+supercharge
+supercharges
+turbocharge
+spearhead
+spearheads
+spearheading
+catalyze
+catalyzes
+catalyzing
+empower
+empowers
+empowering
+democratize
+democratizes
+reimagine
+reimagines
+redefine
+redefines
+ever-evolving
+ever-changing
+ever-growing
+vibrant
+bustling
+thriving
+flourishing
+burgeoning
+full potential
+endless possibilities
+limitless potential
+the possibilities are endless

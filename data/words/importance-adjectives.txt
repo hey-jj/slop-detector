@@ -1,0 +1,16 @@
+# SLOP-I002 importance-inflation adjectives. Violation in public-bug-report, candidate elsewhere.
+comprehensive
+significant
+crucial
+critical
+essential
+vital
+pivotal
+paramount
+indispensable
+noteworthy
+remarkable
+exceptional
+mission-critical
+of utmost importance
+of paramount importance

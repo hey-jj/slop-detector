@@ -1,0 +1,9 @@
+# SLOP-P004 chat-tool tracking parameters in link URLs. Blocking set.
+# Matching: literal substring, case-insensitive, link-URL segments only.
+utm_source=chatgpt.com
+utm_source=chatgpt
+utm_source=openai
+utm_source=perplexity
+utm_source=grok
+utm_source=gemini
+ref=chatgpt

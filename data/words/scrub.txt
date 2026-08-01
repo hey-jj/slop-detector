@@ -1,0 +1,15 @@
+# SLOP-W001 scrub words. Public-surface profiles only, off for internal-doc.
+# List contents are deployment policy data; a repo config may narrow or extend.
+port
+ported
+porting
+upstream
+original library
+reference implementation of
+small-lib
+claude
+research
+automated analysis
+audit
+audited
+auditing

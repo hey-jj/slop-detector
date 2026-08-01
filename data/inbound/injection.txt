@@ -1,0 +1,26 @@
+# SLOP-J001 injection patterns, inbound copy.
+# Matching: word-bounded, case-insensitive.
+# Edits against the vendored words/injection.txt:
+#   - "you are now" is removed; it over-matches transactional mail
+#     ("you are now enrolled", "you are now live")
+ignore previous instructions
+ignore all previous instructions
+ignore the above instructions
+disregard previous instructions
+disregard the above
+forget your instructions
+new instructions:
+system prompt
+developer prompt
+you are an ai
+you are a helpful assistant
+act as an unrestricted
+respond only with
+do not tell the user
+hidden instruction
+begin system prompt
+end system prompt
+<system>
+[system]
+jailbreak
+dan mode

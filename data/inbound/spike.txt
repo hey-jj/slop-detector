@@ -1,0 +1,21 @@
+# SLOP-A001 measured excess-vocabulary spike set, inbound file.
+# The subset of the vendored ornamental lexicon named by the studies (Kobak
+# et al. 2025, Juzek and Ward 2025, Liang et al. 2024), plus three
+# additions those studies name: intricate, intricacies, commendable.
+# The meticulous forms stay in hype-adjectives.
+# Matching: case-insensitive, word-boundary anchored.
+commendable
+delve
+delved
+delves
+delving
+embark
+embarked
+embarking
+embarks
+intricacies
+intricate
+myriad
+plethora
+tapestry
+testament
