@@ -109,6 +109,14 @@ const LEXICONS: &[(&str, &str)] = &[
         "inbound/participial-stoplist.txt",
         include_str!("../data/inbound/participial-stoplist.txt"),
     ),
+    (
+        "inbound/contrastive-stoplist.txt",
+        include_str!("../data/inbound/contrastive-stoplist.txt"),
+    ),
+    (
+        "inbound/provenance-markers.txt",
+        include_str!("../data/inbound/provenance-markers.txt"),
+    ),
 ];
 
 /// Report routing for a rule's findings.
@@ -129,6 +137,7 @@ pub enum Mechanism {
     Codepoint,
     PositionalSpace,
     ParticipialOpener,
+    ContrastiveTail,
 }
 
 /// Interpretive class annotation for quality rules. Not emitted
@@ -201,11 +210,18 @@ pub struct Rule {
     /// phrases (checked case-insensitively in a nearby window) does not
     /// fire. Flattened from the per-term tables in the data.
     pub exemptions: Vec<String>,
-    /// Participial-opener stop-list, lowercased.
+    /// Deny-list, lowercased: the participial-opener stop-list, or the
+    /// contrastive-tail imperative-opener list.
     pub stoplist: Vec<String>,
     /// Participial-opener maximum clause length in bytes between the
     /// opener word and the comma.
     pub max_clause: usize,
+    /// Contrastive-tail noun-phrase byte cap.
+    pub max_np: usize,
+    /// Contrastive-tail clause walk-back window in bytes.
+    pub clause_window: usize,
+    /// Contrastive-tail second-person cue tokens, lowercased.
+    pub second_person: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -241,6 +257,9 @@ struct RuleSpec {
     exemptions: Option<std::collections::BTreeMap<String, Vec<String>>>,
     stoplist: Option<String>,
     max_clause: Option<usize>,
+    max_np: Option<usize>,
+    clause_window: Option<usize>,
+    second_person: Option<Vec<String>>,
     #[allow(dead_code)]
     guard: String,
 }
@@ -319,24 +338,38 @@ pub fn load() -> Result<Vec<Rule>, String> {
             ));
         }
         let stoplist = match (spec.mechanism, &spec.stoplist) {
-            (Mechanism::ParticipialOpener, Some(path)) => lexicon(path)?
-                .into_iter()
-                .map(|t| t.to_ascii_lowercase())
-                .collect(),
+            (Mechanism::ParticipialOpener | Mechanism::ContrastiveTail, Some(path)) => {
+                lexicon(path)?
+                    .into_iter()
+                    .map(|t| t.to_ascii_lowercase())
+                    .collect()
+            }
             (Mechanism::ParticipialOpener, None) => {
                 return Err(format!(
                     "rule {id} is participial-opener but names no stoplist"
                 ));
             }
+            (Mechanism::ContrastiveTail, None) => {
+                return Err(format!(
+                    "rule {id} is contrastive-tail but names no stoplist"
+                ));
+            }
             (_, Some(_)) => {
                 return Err(format!(
-                    "rule {id} names a stoplist but is not participial-opener"
+                    "rule {id} names a stoplist but its mechanism takes none"
                 ));
             }
             (_, None) => Vec::new(),
         };
         if spec.max_clause.is_some() && spec.mechanism != Mechanism::ParticipialOpener {
             return Err(format!("rule {id}: max_clause needs participial-opener"));
+        }
+        if (spec.max_np.is_some() || spec.clause_window.is_some() || spec.second_person.is_some())
+            && spec.mechanism != Mechanism::ContrastiveTail
+        {
+            return Err(format!(
+                "rule {id}: max_np, clause_window, and second_person need contrastive-tail"
+            ));
         }
         if spec.exemptions.is_some() && spec.mechanism != Mechanism::WordSet {
             return Err(format!("rule {id}: exemptions need word-set"));
@@ -357,7 +390,11 @@ pub fn load() -> Result<Vec<Rule>, String> {
             ));
         }
         let patterns = spec.patterns.unwrap_or_default();
-        if !patterns.is_empty() && !matches!(spec.mechanism, Mechanism::WordSet | Mechanism::Regex)
+        if !patterns.is_empty()
+            && !matches!(
+                spec.mechanism,
+                Mechanism::WordSet | Mechanism::Regex | Mechanism::ContrastiveTail
+            )
         {
             return Err(format!("rule {id} carries patterns but is not a text rule"));
         }
@@ -411,6 +448,14 @@ pub fn load() -> Result<Vec<Rule>, String> {
             exemptions,
             stoplist,
             max_clause: spec.max_clause.unwrap_or(100),
+            max_np: spec.max_np.unwrap_or(60),
+            clause_window: spec.clause_window.unwrap_or(240),
+            second_person: spec
+                .second_person
+                .unwrap_or_default()
+                .iter()
+                .map(|t| t.to_lowercase())
+                .collect(),
         });
     }
     if rules.is_empty() {
@@ -464,9 +509,11 @@ mod tests {
             "SLOP-O002",
             "SLOP-O004",
             "SD-Q002",
+            "SD-Q004",
             "SLOP-V001",
             "SLOP-V002",
             "SLOP-S003",
+            "SD-Q003",
         ];
         let expected: Vec<&str> = residue.iter().chain(quality.iter()).copied().collect();
         assert_eq!(ids, expected);
@@ -527,10 +574,11 @@ mod tests {
             "SLOP-O002",
             "SLOP-O004",
             "SD-Q002",
+            "SD-Q004",
         ] {
             assert_eq!(class_of(id), Some(Class::Background), "{id}");
         }
-        for id in ["SLOP-V001", "SLOP-V002", "SLOP-S003"] {
+        for id in ["SLOP-V001", "SLOP-V002", "SLOP-S003", "SD-Q003"] {
             assert_eq!(class_of(id), Some(Class::Individual), "{id}");
         }
         // Residue and injection rules carry no class.
@@ -698,5 +746,43 @@ mod tests {
             .terms
             .contains(&"ignore previous instructions".to_string()));
         assert!(j001.terms.contains(&"system prompt".to_string()));
+    }
+
+    #[test]
+    fn q004_carries_the_c007_suppression_params() {
+        let rules = load().unwrap();
+        let q004 = rules.iter().find(|r| r.id == "SD-Q004").unwrap();
+        assert_eq!(q004.mechanism, Mechanism::ContrastiveTail);
+        assert_eq!(q004.class, Some(Class::Background));
+        assert_eq!(q004.max_np, 60);
+        assert_eq!(q004.clause_window, 240);
+        assert_eq!(q004.second_person, ["you", "your", "you're", "yours"]);
+        // The imperative-opener deny-list, same as SLOP-C007's param.
+        for opener in ["do", "don't", "never", "use", "keep", "please"] {
+            assert!(q004.stoplist.contains(&opener.to_string()), "{opener}");
+        }
+        assert_eq!(q004.stoplist.len(), 18);
+        // The T2-T4 trigger regexes ride the shared regex pass.
+        assert_eq!(q004.patterns.len(), 4);
+    }
+
+    #[test]
+    fn q003_carries_the_provenance_vocabulary_as_individual() {
+        let rules = load().unwrap();
+        let q003 = rules.iter().find(|r| r.id == "SD-Q003").unwrap();
+        assert_eq!(q003.class, Some(Class::Individual));
+        assert_eq!(q003.boundary, Boundary::Word);
+        for term in [
+            "provenance",
+            "reimplemented",
+            "reference implementation",
+            "kept for api parity",
+        ] {
+            assert!(q003.terms.contains(&term.to_string()), "{term}");
+        }
+        assert_eq!(q003.patterns.len(), 4);
+        // No scrub rule loads inbound, so the W001 de-dup exemption is
+        // deliberately absent.
+        assert!(q003.exemptions.is_empty());
     }
 }

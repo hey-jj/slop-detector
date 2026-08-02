@@ -36,8 +36,8 @@ Compute `density = class_hits * 1000 / stats.word_count` per class.
 | Class | Rules |
 |---|---|
 | spike | `SLOP-A001`, `SLOP-O003` |
-| background | `SD-Q001`, `SLOP-A003`, `SLOP-A004`, `SLOP-I001`, `SLOP-I002`, `SLOP-I003`, `SLOP-I004`, `SLOP-T001`, `SLOP-T002`, `SLOP-T003`, `SLOP-C001` to `SLOP-C006`, `SLOP-Q001`, `SLOP-R001`, `SLOP-O001`, `SLOP-O002`, `SLOP-O004`, `SD-Q002` |
-| individual | `SLOP-V001`, `SLOP-V002`, `SLOP-S003` |
+| background | `SD-Q001`, `SLOP-A003`, `SLOP-A004`, `SLOP-I001`, `SLOP-I002`, `SLOP-I003`, `SLOP-I004`, `SLOP-T001`, `SLOP-T002`, `SLOP-T003`, `SLOP-C001` to `SLOP-C006`, `SLOP-Q001`, `SLOP-R001`, `SLOP-O001`, `SLOP-O002`, `SLOP-O004`, `SD-Q002`, `SD-Q004` |
+| individual | `SLOP-V001`, `SLOP-V002`, `SLOP-S003`, `SD-Q003` |
 
 ### spike (full density weight)
 
@@ -55,7 +55,7 @@ Compute `density = class_hits * 1000 / stats.word_count` per class.
 | `SLOP-A004` inflated-diction | `utilize`, `facilitate`, `operationalize`, `aforementioned` families plus the tool-noun and noun-stack patterns. | Named resource-metric collocations like `cpu utilization` are exempt in the data. |
 | `SLOP-I001` vague-intensifier | `very`, `truly`, `highly`, and peers. | The lowest weight in the whole report. Ubiquitous in human business email. |
 | `SLOP-I002` importance-adjectives | `comprehensive`, `crucial`, `pivotal`, and peers. | `critical path`, `critical section`, and `significant figures` are exempt in the data. |
-| `SLOP-I003` hype-adjectives | `state-of-the-art`, `meticulous` forms, `battle-tested`, and peers. | The `meticulous` forms live here, not in spike. |
+| `SLOP-I003` hype-adjectives | `state-of-the-art`, `meticulous` forms, `battle-tested`, and peers. | The `meticulous` forms live here and stay out of spike. |
 | `SLOP-I004` unquantified-magnitude | `significantly`, `dramatically`, `orders of magnitude`, and peers. | Passes contextually when the number is nearby. |
 | `SLOP-T001` filler-meta | `it's important to note`, `in conclusion`, and peers. | Bare `overall` is not in the inbound copy. |
 | `SLOP-T002` transition-trio | `moreover`, `furthermore`, `additionally` at a block or sentence start only. | Trimmed to the measured trio. The long tail (`also`, `meanwhile`, `ultimately`) is deliberately absent: human base rate is high. |
@@ -67,6 +67,7 @@ Compute `density = class_hits * 1000 / stats.word_count` per class.
 | `SLOP-O002` copula-avoidance | `serves as`, `boasts`, `emerges as`, and peers. | `acts as` is precise for adapters and proxies. Weight rises with repetition. |
 | `SLOP-O004` vague-attribution | `studies show`, `experts agree`, `increasingly`, and peers. | Passes when a named citation or count follows. |
 | `SD-Q002` participial-opener | A capitalized `-ing` word opening a sentence, a bounded clause, then a comma (`Building on these findings,`). | Grounded in instruction-tuned models over-producing the shape at 1.5 to 2 times the human rate. The stop-list excludes lookalikes (`During`, `Morning`) and correspondence idioms (`Following`, `Regarding`, `Moving`). Known edge: an `-ing` surname opener can fire. |
+| `SD-Q004` contrastive-negation | A comma-`not` or comma-`never` tail closing its sentence (the `SLOP-C007` T1 shape, ported), plus the about-reframe and copular `not X but Y` regex triggers. | The mechanism suppresses directives: `Use the ledger, not the summary.` stays silent, as do second-person clauses and deny-list verbs after an interior comma or `then`. Ordinary reply-by-Friday mail never fires. slop-detector scans raw bytes with no prose/code segmentation, so an operand contrast in quoted code can land here (for instance `a set, not a list` inside a snippet), and the read carries that residue. Legitimate technical contrast survives suppression too. Density read. |
 
 ### individual (read per hit, quotable)
 
@@ -75,6 +76,7 @@ Compute `density = class_hits * 1000 / stats.word_count` per class.
 | `SLOP-V001` model-self-disclosure | Knowledge-cutoff and model self-description phrases (`as an ai language model` and peers). | Quote directly. These phrases have one source. |
 | `SLOP-V002` assistant-register | `you're absolutely right`, `great question`, `i apologize for the confusion`, and peers. | A human in a live thread can use these sincerely. Weigh whether the artifact has a conversational counterpart. |
 | `SLOP-S003` closing-pleasantries | `i hope this helps` and peers. | Chat-closing register in a received email reads per hit. |
+| `SD-Q003` provenance-marker | The oblique lineage vocabulary (`provenance`, `reimplemented`, `reference implementation`, `kept for api parity`, and peers) plus the parity, `drop-in replacement`, and mirrors-the-upstream patterns. | A submission describing itself this way carries a reading signal about its origin. Data lineage and supply-chain senses of `provenance` are legitimate domain vocabulary, so weigh the document's actual subject. Read per hit, quotable. |
 
 ## Not loaded, by design
 

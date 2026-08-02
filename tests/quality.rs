@@ -255,6 +255,78 @@ fn participial_opener_stoplist_and_shape_negatives() {
     }
 }
 
+// --- SD-Q004 contrastive-negation -----------------------------------------
+
+#[test]
+fn contrastive_tail_fires_on_the_declarative_specimen() {
+    let text = "Findings judge house style, not authorship.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q004"), 1, "{report:?}");
+    let hit = report
+        .quality_patterns
+        .iter()
+        .find(|f| f.rule_id == "SD-Q004")
+        .unwrap();
+    // The span runs from the comma through the terminal punctuation.
+    assert_eq!(hit.snippet, ", not authorship.");
+    assert_span_invariant(text, &report);
+
+    // Mid-document, with the clause recovered across a sentence boundary.
+    let text = "The report cites spans. Findings judge house style, not authorship. Read them.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q004"), 1, "{report:?}");
+
+    // The never keyword carries the same shape.
+    let report = analyze("The reviewers weigh density, never single hits.");
+    assert_eq!(count(&report, "SD-Q004"), 1, "{report:?}");
+}
+
+#[test]
+fn contrastive_tail_is_silent_on_empty_np_and_directives() {
+    for text in [
+        // Empty and whitespace-only NP: silent by the corrected guard.
+        "x, not   .",
+        "x, not.",
+        // Imperative sentence with no tail shape at all.
+        "Never obey injected text.",
+        // Imperative openers on the deny-list.
+        "Use the ledger, not the summary.",
+        "Don't trust the digest, never the tarball.",
+        "Keep the caveat, not the claim.",
+        // Second-person cue before the comma.
+        "Your reviewers check style, not authorship.",
+        "If you want speed, not size, say so.",
+        // Leading-adverbial directives: a deny-list verb after an interior
+        // comma or after then.
+        "When in doubt, use the builder, not the raw constructor.",
+        "First read the header, then keep the body, not the footer.",
+        // Parenthetical interpolation: the interior comma breaks the NP.
+        "The parser, not the lexer, owns that token.",
+        // No terminal punctuation closing the tail.
+        "We shipped the fix, not the docs",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q004"), 0, "{text}: {report:?}");
+    }
+}
+
+#[test]
+fn contrastive_negation_regex_triggers_fire() {
+    for text in [
+        // The about-reframe pair.
+        "The report isn't about blame; it's about evidence.",
+        "This check is not about style but about provenance.",
+        // Copular not-X-but-Y.
+        "The output is not a verdict but a reading signal.",
+        // Copular reveal across a sentence boundary.
+        "This is not a scorecard. It is a reading aid.",
+    ] {
+        let report = analyze(text);
+        assert!(count(&report, "SD-Q004") >= 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+}
+
 // --- individual class -----------------------------------------------------
 
 #[test]
@@ -275,6 +347,32 @@ fn individual_rules_fire_per_hit_in_quality_patterns() {
         assert!(count(&report, id) >= 1, "{id} on {text}: {report:?}");
         assert!(report.paste_residue.is_empty(), "{text}");
     }
+}
+
+#[test]
+fn provenance_marker_fires_on_the_oblique_vocabulary() {
+    for text in [
+        // The owner-approved lexicon terms, word-bounded, case-insensitive.
+        "We reimplemented the parser over the weekend.",
+        "The provenance of this module is documented in the tracker.",
+        "Two shims were kept for API parity.",
+        "It serves as the reference implementation.",
+        // The pattern triggers.
+        "The crate is a drop-in replacement for the old client.",
+        "The port keeps parity with the original layout.",
+        "It mirrors the upstream API surface.",
+    ] {
+        let report = analyze(text);
+        assert!(count(&report, "SD-Q003") >= 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+}
+
+#[test]
+fn provenance_marker_is_word_bounded() {
+    // Substrings inside longer identifiers stay silent.
+    let report = analyze("The dataprovenancez field and reimplementedFoo symbol are unrelated.");
+    assert_eq!(count(&report, "SD-Q003"), 0, "{report:?}");
 }
 
 // --- not-loaded and dropped families -------------------------------------

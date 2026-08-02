@@ -1,0 +1,11 @@
+# SD-Q003 provenance-marker lexicon, inbound selection. Same terms as the
+# vendored words/provenance-oblique.txt (SLOP-W002); carried into inbound/
+# so the inbound selection can drift independently of the reference copy.
+provenance
+reimplemented
+reference implementation
+kept for api parity
+reimplementation
+faithful to the original
+the original crate
+the upstream crate

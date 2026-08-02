@@ -4,7 +4,8 @@
 # Fields per rule:
 #   id        stable rule identifier (SLOP-* carried from ai-slop, SD-* new)
 #   category  report routing: paste_residue | quality_patterns | injection
-#   mechanism word-set | regex | codepoint | positional-space
+#   mechanism word-set | regex | codepoint | positional-space |
+#             participial-opener | contrastive-tail
 #   lexicon   package-relative path to a term list (word-set rules)
 #   case      sensitive | insensitive (word-set rules)
 #   boundary  none | word (word-set rules; regex rules declare \b in-pattern)
@@ -12,6 +13,12 @@
 #   ranges    codepoint ranges, hex, inclusive (codepoint rules)
 #   codepoints  individual codepoints, hex (positional-space rules)
 #   min_count per-document minimum candidate count before the rule fires
+#   stoplist  package-relative path to a lowercased deny-list
+#             (participial-opener and contrastive-tail rules)
+#   max_clause  clause byte cap (participial-opener rules)
+#   max_np    noun-phrase byte cap (contrastive-tail rules)
+#   clause_window  clause walk-back byte cap (contrastive-tail rules)
+#   second_person  lowercased second-person cue tokens (contrastive-tail rules)
 #   guard     interpretive caveats; carried into the agent skill, not evaluated
 #             by the engine
 
@@ -381,6 +388,24 @@ max_clause = 100
 guard = "Sentence-initial present-participial clause: a capitalized -ing word at block or sentence start, a bounded clause, then a comma. Grounded in Reinhart et al. 2025: instruction-tuned models over-produce these at 1.5 to 2 times the human rate. The stop-list excludes non-participial lookalikes and ordinary correspondence idioms (following, regarding, moving, going, looking). Known edge: a sentence opening with an -ing surname (Fleming) can fire; density-only."
 
 [[rule]]
+id = "SD-Q004"
+name = "contrastive-negation"
+category = "quality_patterns"
+class = "background"
+mechanism = "contrastive-tail"
+stoplist = "inbound/contrastive-stoplist.txt"
+max_np = 60
+clause_window = 240
+second_person = ["you", "your", "you're", "yours"]
+patterns = [
+    "(?i)\\b(isn't|is\\s{1,8}not|aren't|are\\s{1,8}not|wasn't|was\\s{1,8}not)\\s{1,8}about\\b[^.!?\\n]{1,100}\\b(it's|it\\s{1,8}is|they're|they\\s{1,8}are)\\s{1,8}about\\b",
+    '(?i)\bnot\s{1,8}about\b[^.!?\n]{1,100}\bbut\s{1,8}about\b',
+    "(?i)\\b(is|are|was|were|isn't|aren't|wasn't|weren't)\\s{1,8}not\\s{1,8}(a|an|the)\\s{1,8}[^.!?;,\\n]{1,40}\\s{1,8}but\\s{1,8}(a|an|the)\\b",
+    '(?i)\b(is|are)\s{1,8}not\s{1,8}(a|an|the)\s{1,8}[^.!?;\n]{1,50}[.;:]\s{0,8}(it|this|that|they)\s{1,8}(is|are)\b',
+]
+guard = "Contrastive-negation caveats, the SLOP-C007 analogue for inbound text: the trailing comma-not or comma-never tail closing its sentence (via the contrastive-tail mechanism), plus the about-reframe and copular not-X-but-Y regex triggers. A density of these caveats is a reading signal that received text may be machine-authored; the human adjudicates every site and the report carries no verdict. Imperative openers on the stop-list, second-person cues before the comma, and interior or then-led directives stay silent: reply-by-Friday-not-Monday mail is the dominant legitimate use. Caveat, stated honestly: slop-detector scans raw bytes with no prose/code segmentation, so operand contrasts inside quoted code or snippets (a set, not a list) can fire here; the skill carries that residue. Rather-than forms are SLOP-C003; adverb-marked not-just-but forms are SLOP-C001."
+
+[[rule]]
 id = "SLOP-V001"
 name = "model-self-disclosure"
 category = "quality_patterns"
@@ -412,3 +437,20 @@ lexicon = "words/pleasantries.txt"
 case = "insensitive"
 boundary = "none"
 guard = "Closing pleasantries (i hope this helps and peers). Read per hit; assistant voice in inbound mail is a real pattern."
+
+[[rule]]
+id = "SD-Q003"
+name = "provenance-marker"
+category = "quality_patterns"
+class = "individual"
+mechanism = "word-set"
+lexicon = "inbound/provenance-markers.txt"
+case = "insensitive"
+boundary = "word"
+patterns = [
+    '(?i)\b(matches|mirrors|tracks|follows|preserves)\s{1,8}the\s{1,8}(reference|original|upstream)\s{1,8}(api|behaviou?r|implementation|crate)\b',
+    '(?i)\b(api|behaviou?ral?)\s{1,8}parity\b',
+    '(?i)\bdrop-in\s{1,8}replacement\b',
+    '(?i)\bparity\s{1,8}with\s{1,8}the\s{1,8}(original|reference|upstream)\b',
+]
+guard = "Oblique-provenance diction in received text: a submission describing itself as a reimplementation, reference-API match, or parity port is a reading signal about origin, never a verdict. Data provenance and supply-chain provenance are legitimate domain vocabulary; the skill weighs the document's actual subject. Read per hit. The lexicon and patterns track ai-slop's SLOP-W002; the W001 de-dup exemption is not carried because no scrub rule loads inbound."

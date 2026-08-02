@@ -1,0 +1,10 @@
+# SLOP-W002 oblique-provenance markers. Candidate tier.
+provenance
+reimplemented
+reference implementation
+kept for api parity
+# below: reference-API-comparison candidates, probe-validated
+reimplementation
+faithful to the original
+the original crate
+the upstream crate

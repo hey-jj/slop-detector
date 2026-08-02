@@ -53,6 +53,19 @@ pub struct Compiled {
     /// Participial-opener rules: (rule index, lowercased stop-list,
     /// max clause bytes).
     participial_rules: Vec<(usize, HashSet<String>, usize)>,
+    /// Contrastive-tail rules (SD-Q004's T1 form).
+    pub(crate) contrastive_rules: Vec<ContrastiveRule>,
+}
+
+/// One compiled contrastive-tail rule: the imperative-opener deny-list and
+/// second-person cues are lowercased at load; `max_np` caps the noun phrase
+/// in bytes and `window` caps the clause walk-back in bytes.
+pub(crate) struct ContrastiveRule {
+    rule: usize,
+    openers: HashSet<String>,
+    second_person: Vec<String>,
+    max_np: usize,
+    window: usize,
 }
 
 static COMPILED: OnceLock<Result<Compiled, String>> = OnceLock::new();
@@ -118,8 +131,22 @@ fn build() -> Result<Compiled, String> {
     let mut cp_rules: Vec<(usize, Vec<(u32, u32)>)> = Vec::new();
     let mut space_rules: Vec<(usize, Vec<u32>, usize)> = Vec::new();
     let mut participial_rules: Vec<(usize, HashSet<String>, usize)> = Vec::new();
+    let mut contrastive_rules: Vec<ContrastiveRule> = Vec::new();
 
     for (idx, rule) in rules.iter().enumerate() {
+        // Every text rule's `patterns` ride the shared regex pass; the data
+        // loader guarantees non-text mechanisms carry none.
+        for p in &rule.patterns {
+            let (pat, bs, be) = rewrite_pattern(p)?;
+            let max_width = validate_bounded_width(&pat)?;
+            rx_pats.push(pat);
+            rx_meta.push(RxMeta {
+                rule: idx,
+                bound_start: bs,
+                bound_end: be,
+                max_width,
+            });
+        }
         match rule.mechanism {
             Mechanism::WordSet | Mechanism::Regex => {
                 for term in &rule.terms {
@@ -134,17 +161,6 @@ fn build() -> Result<Compiled, String> {
                         }
                     }
                 }
-                for p in &rule.patterns {
-                    let (pat, bs, be) = rewrite_pattern(p)?;
-                    let max_width = validate_bounded_width(&pat)?;
-                    rx_pats.push(pat);
-                    rx_meta.push(RxMeta {
-                        rule: idx,
-                        bound_start: bs,
-                        bound_end: be,
-                        max_width,
-                    });
-                }
             }
             Mechanism::Codepoint => cp_rules.push((idx, rule.ranges.clone())),
             Mechanism::PositionalSpace => {
@@ -156,6 +172,15 @@ fn build() -> Result<Compiled, String> {
                     rule.stoplist.iter().cloned().collect(),
                     rule.max_clause,
                 ));
+            }
+            Mechanism::ContrastiveTail => {
+                contrastive_rules.push(ContrastiveRule {
+                    rule: idx,
+                    openers: rule.stoplist.iter().cloned().collect(),
+                    second_person: rule.second_person.clone(),
+                    max_np: rule.max_np,
+                    window: rule.clause_window,
+                });
             }
         }
     }
@@ -219,6 +244,7 @@ fn build() -> Result<Compiled, String> {
         cp_rules,
         space_rules,
         participial_rules,
+        contrastive_rules,
     })
 }
 
@@ -410,6 +436,257 @@ fn scan_participial(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     }
 }
 
+/// First word token of a clause: leading non-word characters (quotes,
+/// brackets) are skipped, then the maximal run of alphanumerics plus
+/// apostrophes is collected, ASCII-lowercased, with the typographic
+/// apostrophe folded so a `don\u{2019}t` in the source still matches the
+/// base-form deny-list entry `don't`.
+fn first_token(clause: &str) -> String {
+    let mut out = String::new();
+    for c in clause.chars() {
+        let c = if c == '\u{2019}' { '\'' } else { c };
+        if c.is_alphanumeric() || c == '\'' {
+            out.push(c.to_ascii_lowercase());
+        } else if out.is_empty() {
+            continue;
+        } else {
+            break;
+        }
+    }
+    out
+}
+
+/// Word token beginning exactly at `at` (used for the interior-directive
+/// check, where the position after `, ` or `then ` is already known).
+fn token_at(clause_lower: &str, at: usize) -> String {
+    first_token(&clause_lower[at..])
+}
+
+/// Word-bounded, case-insensitive containment of `needle` (already
+/// lowercase) in `hay_lower` (already lowercase).
+fn contains_word(hay_lower: &str, needle: &str) -> bool {
+    let mut at = 0usize;
+    while let Some(pos) = hay_lower[at..].find(needle) {
+        let s = at + pos;
+        let e = s + needle.len();
+        let before_ok = hay_lower[..s]
+            .chars()
+            .next_back()
+            .map(|c| !c.is_alphanumeric())
+            .unwrap_or(true);
+        let after_ok = hay_lower[e..]
+            .chars()
+            .next()
+            .map(|c| !c.is_alphanumeric())
+            .unwrap_or(true);
+        if before_ok && after_ok {
+            return true;
+        }
+        at = s + 1;
+    }
+    false
+}
+
+/// Parse the contrastive-tail shape starting at the comma at `comma`: up to
+/// 8 whitespace characters, `not` or `never` (case-insensitive, followed by
+/// 1..=8 whitespace), then an NP of 1..=`np_max` bytes containing none of
+/// `.!?;:,\n` (nor a U+FFFD replacement character, which in raw inbound
+/// text is decode residue, never a noun phrase) and at least one
+/// non-whitespace character (a whitespace-only "NP" is not a noun phrase),
+/// closed by a terminal `.`, `!`, or `?`. Returns the exclusive end offset
+/// of the terminal punctuation. The no-interior-comma constraint is what
+/// keeps the parenthetical `X, not Y, verb ...` interpolation out of scope.
+/// Both whitespace loops match ASCII whitespace only (space/tab/LF/CR), by
+/// design, mirroring ai-slop's SLOP-C007: a non-ASCII space inside a
+/// contrastive tail is an accepted false negative.
+fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
+    let rest = text.get(comma + 1..)?;
+    let mut i = 0usize;
+    for c in rest.chars().take(8) {
+        if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+            i += c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    let after_ws = &rest[i..];
+    // `get` rather than direct slicing: the byte at the cut can sit inside a
+    // multi-byte character, and a directly sliced prefix would panic there.
+    let kw_len = if after_ws
+        .get(..5)
+        .is_some_and(|s| s.eq_ignore_ascii_case("never"))
+    {
+        5
+    } else if after_ws
+        .get(..3)
+        .is_some_and(|s| s.eq_ignore_ascii_case("not"))
+    {
+        3
+    } else {
+        return None;
+    };
+    // The keyword must be followed by 1..=8 ASCII whitespace characters
+    // (its right word boundary).
+    let mut j = i + kw_len;
+    let mut ws = 0usize;
+    for c in rest[j..].chars().take(8) {
+        if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+            ws += 1;
+            j += c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if ws == 0 {
+        return None;
+    }
+    // NP scan: bounded, no clause punctuation, must close with a terminal,
+    // and must carry at least one non-whitespace character — an empty or
+    // whitespace-only span between the keyword and the terminal is not a
+    // noun phrase.
+    let np_start = j;
+    let mut k = j;
+    let mut np_has_content = false;
+    for c in rest[np_start..].chars() {
+        match c {
+            '.' | '!' | '?' => {
+                if !np_has_content {
+                    return None; // empty or whitespace-only NP
+                }
+                return Some(comma + 1 + k + c.len_utf8());
+            }
+            ';' | ':' | ',' | '\n' | '\u{FFFD}' => return None,
+            _ => {
+                if !c.is_whitespace() {
+                    np_has_content = true;
+                }
+                k += c.len_utf8();
+                if k - np_start > np_max {
+                    return None;
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Recover the clause start: walk back from the comma at most `window`
+/// bytes to the nearest clause boundary — a line break, or terminal
+/// punctuation (`.`, `!`, `?`, plus `:`) followed by whitespace — as a
+/// single bounded backward pass. Offset 0 counts as a boundary when it lies
+/// inside the window. `None` means the window was exhausted without a
+/// boundary; the caller fires by default (fail toward the evidence report).
+fn clause_start(text: &str, comma: usize, window: usize) -> Option<usize> {
+    let lo = crate::widen_to_char_boundaries(text, comma.saturating_sub(window)..comma).start;
+    let region = &text[lo..comma];
+    for (off, c) in region.char_indices().rev() {
+        let abs = lo + off;
+        let boundary_end = match c {
+            '\n' => Some(abs + 1),
+            '.' | '!' | '?' | ':' => {
+                let next = text[abs + c.len_utf8()..].chars().next();
+                if matches!(next, Some(w) if w.is_whitespace()) {
+                    Some(abs + c.len_utf8())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        if let Some(mut p) = boundary_end {
+            // The clause proper starts after the whitespace run.
+            for w in text[p..comma].chars() {
+                if w.is_whitespace() {
+                    p += w.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            return Some(p);
+        }
+    }
+    if lo == 0 {
+        return Some(0);
+    }
+    None
+}
+
+/// The suppression classifier over a recovered clause. True means the site
+/// reads as a directive and stays silent.
+fn suppressed(clause: &str, openers: &HashSet<String>, second_person: &[String]) -> bool {
+    let lower = clause.to_lowercase();
+    // 1. Imperative opener: the clause's first token is on the base-form
+    //    deny-list.
+    let head = first_token(&lower);
+    if !head.is_empty() && openers.contains(&head) {
+        return true;
+    }
+    // 2. Second-person cue anywhere before the comma, word-bounded.
+    if second_person.iter().any(|t| contains_word(&lower, t)) {
+        return true;
+    }
+    // 3. A deny-list verb immediately after an interior `, ` or after
+    //    `then ` — the leading-adverbial directive
+    //    ("When in doubt, use the builder, not the raw constructor.").
+    let mut at = 0usize;
+    while let Some(pos) = lower[at..].find(", ") {
+        let s = at + pos + 2;
+        let tok = token_at(&lower, s);
+        if !tok.is_empty() && openers.contains(&tok) {
+            return true;
+        }
+        at = s;
+    }
+    let mut at = 0usize;
+    while let Some(pos) = lower[at..].find("then ") {
+        let s = at + pos;
+        let before_ok = lower[..s]
+            .chars()
+            .next_back()
+            .map(|c| !c.is_alphanumeric())
+            .unwrap_or(true);
+        if before_ok {
+            let tok = token_at(&lower, s + 5);
+            if !tok.is_empty() && openers.contains(&tok) {
+                return true;
+            }
+        }
+        at = s + 5;
+    }
+    false
+}
+
+/// Pass 6: the contrastive-tail scan (SD-Q004's T1 form), ported from
+/// ai-slop's SLOP-C007 structural evaluator. A trailing `, not <NP>.` or
+/// `, never <NP>.` tag closing its sentence fires unless the recovered
+/// clause reads as a directive: an imperative opener on the deny-list, a
+/// second-person cue before the comma, or a deny-list verb after an
+/// interior `, ` or `then `. An exhausted walk-back window fires by
+/// default. Every window is bounded by rule data; the scan runs over the
+/// raw source — slop-detector has no prose/code segmentation, and the
+/// rule's guard states that caveat.
+fn scan_contrastive(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
+    if cp.contrastive_rules.is_empty() {
+        return;
+    }
+    for cr in &cp.contrastive_rules {
+        for (comma, _) in src.char_indices().filter(|&(_, c)| c == ',') {
+            let Some(tail_end) = parse_tail(src, comma, cr.max_np) else {
+                continue;
+            };
+            if let Some(cs) = clause_start(src, comma, cr.window) {
+                if suppressed(&src[cs..comma], &cr.openers, &cr.second_person) {
+                    continue;
+                }
+            }
+            hits.push(Hit {
+                rule: cr.rule,
+                span: comma..tail_end,
+            });
+        }
+    }
+}
+
 /// Pass 2: the overlapping adapter over regex-automata's DFAs. The forward
 /// DFA yields (pattern, end) pairs; the reverse DFA anchored to the pattern
 /// and bounded by the pattern's max width recovers the start.
@@ -573,6 +850,7 @@ pub fn scan_all(cp: &Compiled, src: &str) -> Vec<Hit> {
     scan_rx(cp, src, &mut hits);
     scan_codepoints(cp, src, &mut hits);
     scan_participial(cp, src, &mut hits);
+    scan_contrastive(cp, src, &mut hits);
     resolve_overlaps(&mut hits);
     hits
 }
@@ -614,6 +892,8 @@ mod tests {
         assert!(!cp.rx_meta.is_empty());
         assert!(!cp.cp_rules.is_empty());
         assert_eq!(cp.space_rules.len(), 1);
+        assert_eq!(cp.participial_rules.len(), 1);
+        assert_eq!(cp.contrastive_rules.len(), 1);
     }
 
     #[test]
