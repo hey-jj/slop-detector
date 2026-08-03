@@ -117,6 +117,10 @@ const LEXICONS: &[(&str, &str)] = &[
         "inbound/provenance-markers.txt",
         include_str!("../data/inbound/provenance-markers.txt"),
     ),
+    (
+        "words/agent-loop.txt",
+        include_str!("../data/words/agent-loop.txt"),
+    ),
 ];
 
 /// Report routing for a rule's findings.
@@ -138,6 +142,7 @@ pub enum Mechanism {
     PositionalSpace,
     ParticipialOpener,
     ContrastiveTail,
+    SelfDuplication,
 }
 
 /// Interpretive class annotation for quality rules. Not emitted
@@ -222,6 +227,12 @@ pub struct Rule {
     pub clause_window: usize,
     /// Contrastive-tail second-person cue tokens, lowercased.
     pub second_person: Vec<String>,
+    /// Self-duplication shingle order in words.
+    pub shingle_words: usize,
+    /// Self-duplication minimum verified run length in words.
+    pub min_run_words: usize,
+    /// Self-duplication per-document emission cap, longest runs first.
+    pub max_reports: usize,
 }
 
 #[derive(Deserialize)]
@@ -260,6 +271,9 @@ struct RuleSpec {
     max_np: Option<usize>,
     clause_window: Option<usize>,
     second_person: Option<Vec<String>>,
+    shingle_words: Option<usize>,
+    min_run_words: Option<usize>,
+    max_reports: Option<usize>,
     #[allow(dead_code)]
     guard: String,
 }
@@ -371,6 +385,31 @@ pub fn load() -> Result<Vec<Rule>, String> {
                 "rule {id}: max_np, clause_window, and second_person need contrastive-tail"
             ));
         }
+        let dup_params = (spec.shingle_words, spec.min_run_words, spec.max_reports);
+        let (shingle_words, min_run_words, max_reports) = match (spec.mechanism, dup_params) {
+            (Mechanism::SelfDuplication, (Some(k), Some(floor), Some(cap))) => {
+                if k == 0 || floor < k {
+                    return Err(format!(
+                        "rule {id}: shingle_words must be at least 1 and \
+                         min_run_words at least shingle_words"
+                    ));
+                }
+                (k, floor, cap)
+            }
+            (Mechanism::SelfDuplication, _) => {
+                return Err(format!(
+                    "rule {id}: self-duplication requires shingle_words, \
+                     min_run_words, and max_reports"
+                ));
+            }
+            (_, (None, None, None)) => (0, 0, 0),
+            _ => {
+                return Err(format!(
+                    "rule {id}: shingle_words, min_run_words, and max_reports \
+                     need self-duplication"
+                ));
+            }
+        };
         if spec.exemptions.is_some() && spec.mechanism != Mechanism::WordSet {
             return Err(format!("rule {id}: exemptions need word-set"));
         }
@@ -456,6 +495,9 @@ pub fn load() -> Result<Vec<Rule>, String> {
                 .iter()
                 .map(|t| t.to_lowercase())
                 .collect(),
+            shingle_words,
+            min_run_words,
+            max_reports,
         });
     }
     if rules.is_empty() {
@@ -490,6 +532,7 @@ mod tests {
             "SD-Q001",
             "SLOP-A003",
             "SLOP-A004",
+            "SLOP-A005",
             "SLOP-I001",
             "SLOP-I002",
             "SLOP-I003",
@@ -503,6 +546,7 @@ mod tests {
             "SLOP-C004",
             "SLOP-C005",
             "SLOP-C006",
+            "SLOP-C008",
             "SLOP-Q001",
             "SLOP-R001",
             "SLOP-O001",
@@ -512,8 +556,10 @@ mod tests {
             "SD-Q004",
             "SLOP-V001",
             "SLOP-V002",
+            "SLOP-V004",
             "SLOP-S003",
             "SD-Q003",
+            "SD-Q005",
         ];
         let expected: Vec<&str> = residue.iter().chain(quality.iter()).copied().collect();
         assert_eq!(ids, expected);
@@ -555,6 +601,7 @@ mod tests {
             "SD-Q001",
             "SLOP-A003",
             "SLOP-A004",
+            "SLOP-A005",
             "SLOP-I001",
             "SLOP-I002",
             "SLOP-I003",
@@ -568,6 +615,7 @@ mod tests {
             "SLOP-C004",
             "SLOP-C005",
             "SLOP-C006",
+            "SLOP-C008",
             "SLOP-Q001",
             "SLOP-R001",
             "SLOP-O001",
@@ -578,7 +626,14 @@ mod tests {
         ] {
             assert_eq!(class_of(id), Some(Class::Background), "{id}");
         }
-        for id in ["SLOP-V001", "SLOP-V002", "SLOP-S003", "SD-Q003"] {
+        for id in [
+            "SLOP-V001",
+            "SLOP-V002",
+            "SLOP-V004",
+            "SLOP-S003",
+            "SD-Q003",
+            "SD-Q005",
+        ] {
             assert_eq!(class_of(id), Some(Class::Individual), "{id}");
         }
         // Residue and injection rules carry no class.
@@ -764,6 +819,62 @@ mod tests {
         assert_eq!(q004.stoplist.len(), 18);
         // The T2-T4 trigger regexes ride the shared regex pass.
         assert_eq!(q004.patterns.len(), 4);
+    }
+
+    #[test]
+    fn q005_carries_the_u001_duplication_params() {
+        let rules = load().unwrap();
+        let q005 = rules.iter().find(|r| r.id == "SD-Q005").unwrap();
+        assert_eq!(q005.mechanism, Mechanism::SelfDuplication);
+        assert_eq!(q005.class, Some(Class::Individual));
+        assert_eq!(q005.shingle_words, 8);
+        assert_eq!(q005.min_run_words, 10);
+        assert_eq!(q005.max_reports, 20);
+        assert!(q005.patterns.is_empty());
+        // The params are exclusive to the mechanism: no other rule carries
+        // them.
+        for r in rules.iter().filter(|r| r.id != "SD-Q005") {
+            assert_eq!(r.shingle_words, 0, "{}", r.id);
+        }
+    }
+
+    #[test]
+    fn v004_loads_the_vendored_agent_loop_lexicon_as_individual() {
+        let rules = load().unwrap();
+        let v004 = rules.iter().find(|r| r.id == "SLOP-V004").unwrap();
+        assert_eq!(v004.class, Some(Class::Individual));
+        assert_eq!(v004.boundary, Boundary::Word);
+        for term in [
+            "this turn",
+            "as requested",
+            "per your request",
+            "point me at",
+        ] {
+            assert!(v004.terms.contains(&term.to_string()), "{term}");
+        }
+        // The construction patterns: Flagged-for is case-sensitive by
+        // design (no (?i) prefix), the all-N-confirmed shape is not.
+        assert_eq!(v004.patterns.len(), 2);
+        assert!(v004.patterns[0].starts_with(r"\bFlagged for"));
+        // The refreshed vendored assistant-offers lexicon no longer carries
+        // the request-reference phrases (they moved to agent-loop.txt in
+        // ai-slop 0.1.6); that lexicon stays unloaded inbound either way.
+        let agent_loop = lexicon("words/agent-loop.txt").unwrap();
+        assert_eq!(agent_loop.len(), 10);
+        assert_eq!(v004.terms, agent_loop, "loaded unmodified from words/");
+    }
+
+    #[test]
+    fn a005_and_c008_carry_the_ai_slop_regex_sets_as_background() {
+        let rules = load().unwrap();
+        let a005 = rules.iter().find(|r| r.id == "SLOP-A005").unwrap();
+        assert_eq!(a005.mechanism, Mechanism::Regex);
+        assert_eq!(a005.class, Some(Class::Background));
+        assert_eq!(a005.patterns.len(), 8);
+        let c008 = rules.iter().find(|r| r.id == "SLOP-C008").unwrap();
+        assert_eq!(c008.mechanism, Mechanism::Regex);
+        assert_eq!(c008.class, Some(Class::Background));
+        assert_eq!(c008.patterns.len(), 4);
     }
 
     #[test]

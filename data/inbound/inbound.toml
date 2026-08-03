@@ -185,6 +185,24 @@ guard = "Inflated substitutions (utilize, facilitate, operationalize, aforementi
 utilization = ["cpu utilization", "gpu utilization", "memory utilization", "heap utilization", "disk utilization", "bandwidth utilization", "link utilization", "resource utilization", "capacity utilization", "cache utilization", "core utilization", "pool utilization", "queue utilization", "utilization rate", "utilization ratio"]
 
 [[rule]]
+id = "SLOP-A005"
+name = "metaphor-reach-phrases"
+category = "quality_patterns"
+class = "background"
+mechanism = "regex"
+patterns = [
+    '(?i)\btells? a(\s{1,8}[a-z]{1,20}){0,2}\s{1,8}story\b',
+    '(?i)\b(worth sitting with|should sit with)\b',
+    '(?i)\bthe invitation (is|here is) to\b',
+    '(?i)\bcanary in the coal\s{0,1}mine\b',
+    '(?i)\b(is|as|remains) (our|the|a) north star\b',
+    '(?i)\brich(er)? (tapestry|picture)\b',
+    '(?i)\bserves? as a (canary|beacon|compass)\b',
+    '(?i)\bweaves? together\b',
+]
+guard = "Multi-word metaphor-reach idiom families, carried from ai-slop's SLOP-A005: measured at zero hits in 21,888 words of human-authored dev prose and 5/5 ornamental precision in the AI-heavy corpus. Every pattern edge is a closed word boundary, so compass never reaches into compassion. Density read; the judge cue is whether the sender's project actually operates the thing the metaphor names (a real canary pipeline earns canary; a pitch deck does not). Caveat, stated honestly: slop-detector scans raw bytes with no segmentation and no quotation suppression, so an idiom inside quoted material still reports here — the container annotation marks it and the human discounts it. Single-token metaphors (canary, beacon, compass alone) are deliberately absent: 85-93 percent term-of-art collisions; they stay a hand-read skill tell."
+
+[[rule]]
 id = "SLOP-I001"
 name = "vague-intensifier"
 category = "quality_patterns"
@@ -325,6 +343,20 @@ patterns = ['(?i)\bon (the )?one hand\b.{1,500}\bon the other( hand)?\b', '(?i)\
 guard = "Balance scaffolding and stock paradoxes."
 
 [[rule]]
+id = "SLOP-C008"
+name = "contrastive-pair"
+category = "quality_patterns"
+class = "background"
+mechanism = "regex"
+patterns = [
+    '(?i)\bnot to\s{1,8}[^.!?;:\n]{1,60},\s{0,8}but to\b',
+    '(?i)\bnot (what|how|why|where|when|whether|who)\b[^.!?;:\n]{1,60},\s{0,8}but (what|how|why|where|when|whether|who)\b',
+    '(?i),\s{0,8}not\s{1,8}[^.!?;:,\n]{1,50},\s{0,8}but\s{1,8}',
+    '(?i)\b(is|are) not\b[^.!?;:\n]{1,60}\.\s{1,8}(it|this|that|they) (is|are)\b',
+]
+guard = "The not-X-but-Y pair forms the comma-tail rule cannot reach, carried from ai-slop's SLOP-C008: the infinitive pair (not to X, but to Y), the wh-parallel pair (not what X, but how Y), the interpolated pair (X, not Y, but Z) that SD-Q004's tail parser excludes by its no-interior-comma constraint, and the two-sentence reframe without SLOP-C002's pronoun-subject requirement. Adverb-marked not-just/only-but forms stay SLOP-C001, rather-than forms stay SLOP-C003, comma-not tails stay SD-Q004. The pair form is the family's highest-FP shape because one load-bearing rhetorical contrast is a legitimate choice: strictly a density read alongside the rest of the contrast family, and stats.densities carries the figure. Passes when the rejected half was actually asserted earlier or in the thread."
+
+[[rule]]
 id = "SLOP-Q001"
 name = "rhetorical-question"
 category = "quality_patterns"
@@ -403,7 +435,7 @@ patterns = [
     "(?i)\\b(is|are|was|were|isn't|aren't|wasn't|weren't)\\s{1,8}not\\s{1,8}(a|an|the)\\s{1,8}[^.!?;,\\n]{1,40}\\s{1,8}but\\s{1,8}(a|an|the)\\b",
     '(?i)\b(is|are)\s{1,8}not\s{1,8}(a|an|the)\s{1,8}[^.!?;\n]{1,50}[.;:]\s{0,8}(it|this|that|they)\s{1,8}(is|are)\b',
 ]
-guard = "Contrastive-negation caveats, the SLOP-C007 analogue for inbound text: the trailing comma-not or comma-never tail closing its sentence (via the contrastive-tail mechanism), plus the about-reframe and copular not-X-but-Y regex triggers. A density of these caveats is a reading signal that received text may be machine-authored; the human adjudicates every site and the report carries no verdict. Imperative openers on the stop-list, second-person cues before the comma, and interior or then-led directives stay silent: reply-by-Friday-not-Monday mail is the dominant legitimate use. Caveat, stated honestly: slop-detector scans raw bytes with no prose/code segmentation, so operand contrasts inside quoted code or snippets (a set, not a list) can fire here; the skill carries that residue. Rather-than forms are SLOP-C003; adverb-marked not-just-but forms are SLOP-C001."
+guard = "Contrastive-negation caveats, the SLOP-C007 analogue for inbound text: the trailing comma-not or comma-never tail closing its sentence (via the contrastive-tail mechanism), plus the about-reframe and copular not-X-but-Y regex triggers. A density of these caveats is a reading signal that received text may be machine-authored; the human adjudicates every site and the report carries no verdict. Imperative openers on the stop-list, second-person cues before the comma, and interior or then-led directives stay silent: reply-by-Friday-not-Monday mail is the dominant legitimate use. A period is a tail terminal only at a real sentence boundary, so an abbreviation-internal period (the U.S.) neither closes the tail early nor truncates the recovered clause; and a word-bounded but inside the tail rejects it outright — a not-X-but-Y continuation is SLOP-C008's pair territory, never a bare apophatic caveat. Caveat, stated honestly: slop-detector scans raw bytes with no prose/code segmentation, so operand contrasts inside quoted code or snippets (a set, not a list) can fire here; the skill carries that residue. Rather-than forms are SLOP-C003; adverb-marked not-just-but forms are SLOP-C001."
 
 [[rule]]
 id = "SLOP-V001"
@@ -426,6 +458,21 @@ lexicon = "words/assistant-voice.txt"
 case = "insensitive"
 boundary = "none"
 guard = "Assistant conversational register (you're absolutely right, great question, i apologize for the confusion). Read per hit. A human replying in a live thread can use these sincerely; the skill weighs whether a conversational counterpart exists."
+
+[[rule]]
+id = "SLOP-V004"
+name = "agent-loop-vocabulary"
+category = "quality_patterns"
+class = "individual"
+mechanism = "word-set"
+lexicon = "words/agent-loop.txt"
+case = "insensitive"
+boundary = "word"
+patterns = [
+    '\bFlagged for\b',
+    '(?i)\ball\s{1,8}(two|three|four|five|six|seven|eight|nine|ten|\d{1,3})\s{1,8}(figures|numbers|counts|claims|totals|links)\s{1,8}(confirmed|verified|checked)\b',
+]
+guard = "Agent-loop vocabulary, carried from ai-slop's SLOP-V004: text addressed to an orchestrator, an operator, or a drafting loop rather than the reader (this turn, as requested, per your request, point me at), shipped in a durable artifact. In received text this residue is an AI-authorship signal: the sender's document outlived the loop that produced it. The Flagged-for pattern is case-sensitive and truncated at the preposition, so it matches the construction with any addressee and can never be keyed to a name; lowercase mid-sentence uses (a commit flagged for review) never fire. Inbound caveat: a forwarded chat transcript legitimately contains all of these — the human reads each hit against the container, and the container annotation helps. Read per hit."
 
 [[rule]]
 id = "SLOP-S003"
@@ -454,3 +501,14 @@ patterns = [
     '(?i)\bparity\s{1,8}with\s{1,8}the\s{1,8}(original|reference|upstream)\b',
 ]
 guard = "Oblique-provenance diction in received text: a submission describing itself as a reimplementation, reference-API match, or parity port is a reading signal about origin, never a verdict. Data provenance and supply-chain provenance are legitimate domain vocabulary; the skill weighs the document's actual subject. Read per hit. The lexicon and patterns track ai-slop's SLOP-W002; the W001 de-dup exemption is not carried because no scrub rule loads inbound."
+
+[[rule]]
+id = "SD-Q005"
+name = "self-duplication"
+category = "quality_patterns"
+class = "individual"
+mechanism = "self-duplication"
+shingle_words = 8
+min_run_words = 10
+max_reports = 20
+guard = "Verbatim self-duplication within one document, the SLOP-U001 analogue for inbound text: an 8-word shingle seed, verified by exact token comparison and extended to the maximal shared run, emitted only at 10 words or more, one finding per repeat occurrence (second and later), capped at max_reports longest-first. Every fire is a true verbatim repeat, so the matcher cannot false-positive; the human's call is whether the repetition is deliberate (a required disclaimer, legal boilerplate, a genre refrain) or template stamping — restated paragraphs and shared copy blocks across deck sections are the target. The floor is deliberate: five-word refrains and drifting-referent near-duplicates need fact comparison and stay hand-read. Raw bytes with no segmentation: fenced content tokenizes like every other rule's input, and a duplicated run inside a fence reports with its fenced-code container annotation instead of being skipped. slop-detector has no quotation suppression either, so a repeated quoted claim still reports here with its container annotation — annotate, never suppress. The earlier copy sits at the matching text before the reported span. Cross-file duplication across a bundle of documents reports separately in bundle mode."

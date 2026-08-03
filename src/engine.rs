@@ -55,6 +55,17 @@ pub struct Compiled {
     participial_rules: Vec<(usize, HashSet<String>, usize)>,
     /// Contrastive-tail rules (SD-Q004's T1 form).
     pub(crate) contrastive_rules: Vec<ContrastiveRule>,
+    /// Self-duplication rules (SD-Q005): rule index plus the shingle
+    /// order, run floor, and emission cap in words.
+    pub(crate) duplication_rules: Vec<DuplicationRule>,
+}
+
+/// One compiled self-duplication rule.
+pub(crate) struct DuplicationRule {
+    pub(crate) rule: usize,
+    pub(crate) shingle_words: usize,
+    pub(crate) min_run_words: usize,
+    pub(crate) max_reports: usize,
 }
 
 /// One compiled contrastive-tail rule: the imperative-opener deny-list and
@@ -132,6 +143,7 @@ fn build() -> Result<Compiled, String> {
     let mut space_rules: Vec<(usize, Vec<u32>, usize)> = Vec::new();
     let mut participial_rules: Vec<(usize, HashSet<String>, usize)> = Vec::new();
     let mut contrastive_rules: Vec<ContrastiveRule> = Vec::new();
+    let mut duplication_rules: Vec<DuplicationRule> = Vec::new();
 
     for (idx, rule) in rules.iter().enumerate() {
         // Every text rule's `patterns` ride the shared regex pass; the data
@@ -180,6 +192,14 @@ fn build() -> Result<Compiled, String> {
                     second_person: rule.second_person.clone(),
                     max_np: rule.max_np,
                     window: rule.clause_window,
+                });
+            }
+            Mechanism::SelfDuplication => {
+                duplication_rules.push(DuplicationRule {
+                    rule: idx,
+                    shingle_words: rule.shingle_words,
+                    min_run_words: rule.min_run_words,
+                    max_reports: rule.max_reports,
                 });
             }
         }
@@ -245,6 +265,7 @@ fn build() -> Result<Compiled, String> {
         space_rules,
         participial_rules,
         contrastive_rules,
+        duplication_rules,
     })
 }
 
@@ -487,15 +508,68 @@ fn contains_word(hay_lower: &str, needle: &str) -> bool {
     false
 }
 
+/// Bounded terminal test for a `.` met during the NP scan or the clause
+/// walk-back, ported from ai-slop's SLOP-C007 fix. `dot_end` is the offset
+/// just past the `.` in `text`. A period followed directly by an
+/// alphanumeric character is abbreviation- or number-internal (`U.S`,
+/// `3.5`): not a terminal. A period followed by a bounded ASCII space/tab
+/// run and then a lowercase continuation is mid-sentence punctuation
+/// (`U.S. but`, `e.g. the`): not a terminal. Everything else — end of
+/// text, a line break, an uppercase/digit/quote/bracket follower, a
+/// whitespace run past the parser's 8-unit bound — is a terminal, exactly
+/// as before this test existed. The peek is O(1) and bounded. Accepted
+/// false negatives, mirrored from ai-slop's KNOWN-EDGES: chat-style prose
+/// that starts sentences lowercase reads a real terminal as a
+/// continuation and stays silent, and an abbreviation followed by a
+/// capitalized word (`Mr. Smith`) still reads as a terminal — both
+/// resolve toward silence or the pre-existing behavior, never toward a
+/// new firing surface.
+fn period_is_terminal(text: &str, dot_end: usize) -> bool {
+    let mut chars = text[dot_end..].chars();
+    let Some(first) = chars.next() else {
+        return true; // end of text
+    };
+    if first.is_alphanumeric() {
+        return false; // abbreviation- or number-internal
+    }
+    if first != ' ' && first != '\t' {
+        // Line breaks end the block; quotes, brackets, and punctuation all
+        // sit on the terminal side.
+        return true;
+    }
+    // Walk at most 8 ASCII space/tab units, mirroring the tail parser's own
+    // whitespace bound.
+    let mut seen = 1usize;
+    loop {
+        match chars.next() {
+            Some(' ') | Some('\t') => {
+                seen += 1;
+                if seen > 8 {
+                    return true;
+                }
+            }
+            Some('\n') | Some('\r') => return true, // block end
+            Some(c) => return !c.is_lowercase(),
+            None => return true,
+        }
+    }
+}
+
 /// Parse the contrastive-tail shape starting at the comma at `comma`: up to
 /// 8 whitespace characters, `not` or `never` (case-insensitive, followed by
 /// 1..=8 whitespace), then an NP of 1..=`np_max` bytes containing none of
-/// `.!?;:,\n` (nor a U+FFFD replacement character, which in raw inbound
+/// `!?;:,\n` (nor a U+FFFD replacement character, which in raw inbound
 /// text is decode residue, never a noun phrase) and at least one
 /// non-whitespace character (a whitespace-only "NP" is not a noun phrase),
-/// closed by a terminal `.`, `!`, or `?`. Returns the exclusive end offset
-/// of the terminal punctuation. The no-interior-comma constraint is what
-/// keeps the parenthetical `X, not Y, verb ...` interpolation out of scope.
+/// closed by a terminal `.`, `!`, or `?`. A non-terminal `.`
+/// (abbreviation-internal or mid-sentence per `period_is_terminal`) is
+/// legal NP content. Returns the exclusive end offset of the terminal
+/// punctuation. The no-interior-comma constraint is what keeps the
+/// parenthetical `X, not Y, verb ...` interpolation out of scope, and a
+/// word-bounded `but` anywhere in the NP rejects the tail outright: a
+/// contrastive continuation (`, not in the U.S. but in Asia.`) is the
+/// not-X-but-Y pair form — SLOP-C008's territory and a legitimate
+/// contrast — never a bare apophatic caveat.
 /// Both whitespace loops match ASCII whitespace only (space/tab/LF/CR), by
 /// design, mirroring ai-slop's SLOP-C007: a non-ASCII space inside a
 /// contrastive tail is an accepted false negative.
@@ -549,9 +623,28 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
     let mut np_has_content = false;
     for c in rest[np_start..].chars() {
         match c {
+            '.' if !period_is_terminal(text, comma + 1 + k + 1) => {
+                // Abbreviation-internal or mid-sentence period (`U.S.`,
+                // `e.g.`): NP content, not a terminal.
+                np_has_content = true;
+                k += 1;
+                if k - np_start > np_max {
+                    return None;
+                }
+            }
             '.' | '!' | '?' => {
                 if !np_has_content {
                     return None; // empty or whitespace-only NP
+                }
+                // A word-bounded `but` inside the tail means the negation
+                // carries its own contrastive continuation ("not in the
+                // U.S. but in Asia"): a not-X-but-Y pair, which is a
+                // legitimate contrast shape and SLOP-C008's territory, not
+                // a bare apophatic caveat. The comma-tail rule stays
+                // silent. Bounded: the NP is at most `np_max` bytes.
+                let np_lower = rest[np_start..k].to_ascii_lowercase();
+                if contains_word(&np_lower, "but") {
+                    return None;
                 }
                 return Some(comma + 1 + k + c.len_utf8());
             }
@@ -573,7 +666,12 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
 /// Recover the clause start: walk back from the comma at most `window`
 /// bytes to the nearest clause boundary — a line break, or terminal
 /// punctuation (`.`, `!`, `?`, plus `:`) followed by whitespace — as a
-/// single bounded backward pass. Offset 0 counts as a boundary when it lies
+/// single bounded backward pass. A `.` additionally goes through
+/// `period_is_terminal`, so an abbreviation (`the U.S. market`) no longer
+/// truncates the recovered clause — the suppression classifier sees the
+/// whole sentence, an FP-reducing change. The `:` `!` `?` arms are
+/// untouched: a colon followed by lowercase is a legitimate clause
+/// boundary and must stay one. Offset 0 counts as a boundary when it lies
 /// inside the window. `None` means the window was exhausted without a
 /// boundary; the caller fires by default (fail toward the evidence report).
 fn clause_start(text: &str, comma: usize, window: usize) -> Option<usize> {
@@ -585,7 +683,9 @@ fn clause_start(text: &str, comma: usize, window: usize) -> Option<usize> {
             '\n' => Some(abs + 1),
             '.' | '!' | '?' | ':' => {
                 let next = text[abs + c.len_utf8()..].chars().next();
-                if matches!(next, Some(w) if w.is_whitespace()) {
+                if matches!(next, Some(w) if w.is_whitespace())
+                    && (c != '.' || period_is_terminal(text, abs + 1))
+                {
                     Some(abs + c.len_utf8())
                 } else {
                     None
@@ -843,6 +943,32 @@ fn scan_codepoints(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     }
 }
 
+/// Pass 7: the within-document self-duplication scan (SD-Q005), ported
+/// from ai-slop's SLOP-U001 in its memory-frugal form (see the
+/// `duplication` module). One hit per repeat occurrence (second and
+/// later), span = the later copy, capped at `max_reports` longest-first.
+/// Raw bytes throughout: fenced content shingles like everything else,
+/// and the container pre-pass annotates what lands inside a fence.
+fn scan_duplication(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
+    use crate::duplication;
+    if cp.duplication_rules.is_empty() {
+        return;
+    }
+    let mut tokens = duplication::Tokens::new();
+    duplication::tokenize_into(&mut tokens, src, 0, 0);
+    for dr in &cp.duplication_rules {
+        let mut runs = duplication::find_runs(&tokens, dr.shingle_words, dr.min_run_words, false);
+        duplication::cap_longest_first(&mut runs, dr.max_reports);
+        for run in runs {
+            let toks = &tokens.toks;
+            hits.push(Hit {
+                rule: dr.rule,
+                span: toks[run.later].start..toks[run.later + run.len - 1].end,
+            });
+        }
+    }
+}
+
 /// Run every pass over one source text.
 pub fn scan_all(cp: &Compiled, src: &str) -> Vec<Hit> {
     let mut hits = Vec::new();
@@ -851,6 +977,7 @@ pub fn scan_all(cp: &Compiled, src: &str) -> Vec<Hit> {
     scan_codepoints(cp, src, &mut hits);
     scan_participial(cp, src, &mut hits);
     scan_contrastive(cp, src, &mut hits);
+    scan_duplication(cp, src, &mut hits);
     resolve_overlaps(&mut hits);
     hits
 }
@@ -894,6 +1021,7 @@ mod tests {
         assert_eq!(cp.space_rules.len(), 1);
         assert_eq!(cp.participial_rules.len(), 1);
         assert_eq!(cp.contrastive_rules.len(), 1);
+        assert_eq!(cp.duplication_rules.len(), 1);
     }
 
     #[test]

@@ -1,21 +1,29 @@
-//! Thin CLI over the library. Reads text from a path argument or stdin and
-//! streams the evidence report as JSON to stdout.
+//! Thin CLI over the library. Reads text from path arguments or stdin and
+//! streams the evidence report as JSON to stdout. One path (or stdin)
+//! produces the single-document report; two or more paths produce the
+//! bundle report, with per-file reports plus cross-file duplication.
 
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: slop-detector [FILE]
+const USAGE: &str = "usage: slop-detector [--allow-term TERM]... [FILE]...
 
-Reads FILE, or stdin when FILE is absent, and prints the evidence report as JSON.
-Inputs over 4 MiB are rejected (exit 40).
+Reads each FILE, or stdin when no FILE is given, and prints the evidence
+report as JSON. One input produces the single-document report. Two or more
+FILEs produce the bundle report: per-file reports plus cross-file
+verbatim-duplication evidence.
+Each input over 4 MiB is rejected (exit 40).
 
 Options:
-  -h, --help     print this help
-  -V, --version  print the version";
+  --allow-term TERM  label findings matching this topic term (repeatable);
+                     labeled hits stay in the report and leave the residual
+                     densities
+  -h, --help         print this help
+  -V, --version      print the version";
 
-/// Fail-closed input cap. Match-dense inputs produce reports proportional
-/// to their size; the cap bounds worst-case memory for the CLI. The
-/// library itself takes any `&str`.
+/// Fail-closed input cap, applied per input. Match-dense inputs produce
+/// reports proportional to their size; the cap bounds worst-case memory
+/// for the CLI. The library itself takes any `&str`.
 const MAX_INPUT_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Failure exits: 1 for a read or encoding error, 40 for unsupported input
@@ -40,7 +48,8 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), Failure> {
-    let mut path: Option<std::path::PathBuf> = None;
+    let mut paths: Vec<std::path::PathBuf> = Vec::new();
+    let mut opts = slop_detector::AnalyzeOptions::default();
     let mut parser = lexopt::Parser::from_env();
     while let Some(arg) = parser.next().map_err(|e| Failure::Read(e.to_string()))? {
         match arg {
@@ -50,19 +59,41 @@ fn run() -> Result<(), Failure> {
             lexopt::Arg::Short('V') | lexopt::Arg::Long("version") => {
                 return write_line(concat!("slop-detector ", env!("CARGO_PKG_VERSION")));
             }
-            lexopt::Arg::Value(v) if path.is_none() => {
-                path = Some(std::path::PathBuf::from(v));
+            lexopt::Arg::Long("allow-term") => {
+                let term = parser
+                    .value()
+                    .map_err(|e| Failure::Read(e.to_string()))?
+                    .into_string()
+                    .map_err(|_| Failure::Read("--allow-term needs UTF-8".to_string()))?;
+                opts.allow_terms.push(term);
+            }
+            lexopt::Arg::Value(v) => {
+                paths.push(std::path::PathBuf::from(v));
             }
             arg => return Err(Failure::Read(arg.unexpected().to_string())),
         }
     }
 
-    let text = read_input(path.as_deref())?;
-    let report = slop_detector::analyze(&text);
-    emit(&report)
+    match paths.len() {
+        0 => {
+            let text = read_input(None)?;
+            emit(&slop_detector::analyze_with(&text, &opts))
+        }
+        1 => {
+            let text = read_input(Some(&paths[0]))?;
+            emit(&slop_detector::analyze_with(&text, &opts))
+        }
+        _ => {
+            let docs: Vec<(String, String)> = paths
+                .iter()
+                .map(|p| Ok((p.display().to_string(), read_input(Some(p))?)))
+                .collect::<Result<_, Failure>>()?;
+            emit(&slop_detector::analyze_bundle_with(&docs, &opts))
+        }
+    }
 }
 
-/// Read the input with the size cap enforced before the bytes are held.
+/// Read one input with the size cap enforced before the bytes are held.
 fn read_input(path: Option<&std::path::Path>) -> Result<String, Failure> {
     let over = |n: u64| {
         Failure::Unsupported(format!(
@@ -98,7 +129,7 @@ fn read_input(path: Option<&std::path::Path>) -> Result<String, Failure> {
 /// Stream the report to stdout without materializing the JSON as a string.
 /// A closed pipe (`slop-detector big.txt | head`) is a quiet successful
 /// exit, the standard CLI convention.
-fn emit(report: &slop_detector::EvidenceReport) -> Result<(), Failure> {
+fn emit<T: serde::Serialize>(report: &T) -> Result<(), Failure> {
     let stdout = io::stdout().lock();
     let mut w = io::BufWriter::new(stdout);
     match serde_json::to_writer_pretty(&mut w, report) {

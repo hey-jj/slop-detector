@@ -1,0 +1,18 @@
+# SLOP-V004 agent-loop vocabulary. Candidate tier. Text addressed to the
+# orchestrator, the operator, or the drafting loop rather than the reader.
+# The two session/conversation entries ship only while the pre-release
+# corpus sweep of the owner's repos stays clean; on a collision they drop
+# to the skill tell. The request-reference entries (as requested, per your
+# request) moved here from words/assistant-offers.txt: one owner per
+# phrase, no double-reporting, and this rule's stances (commit-message
+# relax, internal-doc apply) are the ones the evidence supports.
+this turn
+in this turn
+in a previous turn
+as requested
+as requested above
+per your request
+in this conversation
+earlier in this conversation
+in this session
+point me at

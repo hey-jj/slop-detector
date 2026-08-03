@@ -4,10 +4,12 @@ Two layers live here.
 
 `words/` and `policy.toml` are vendored verbatim from the ai-slop crate.
 They are the unmodified reference copy. Do not edit them. Re-vendor from
-ai-slop to update. `words/` matches ai-slop 0.1.5 `policy/words/*.txt`
-(the 0.1.5 refresh added `provenance-oblique.txt` and changed no other
-file). `policy.toml` remains the 0.1.2 snapshot (commit `9797c33`,
-`policy/policy.toml`) pending the coordinated re-vendor.
+ai-slop to update. `words/` matches ai-slop 0.1.6 `policy/words/*.txt`
+(the 0.1.6 refresh added `agent-loop.txt` and moved the two
+request-reference phrases there out of `assistant-offers.txt`).
+`policy.toml` is the 0.1.6 snapshot (policy version 1.2.0). Its `digest`
+field is empty in the vendored source by ai-slop convention: ai-slop
+computes the value at its own build, and nobody hand-writes it.
 
 `inbound/` is the slop-detector selection: `inbound.toml` is the loaded rule
 table (id, category, mechanism, lexicon or patterns, boundary mode, per-rule

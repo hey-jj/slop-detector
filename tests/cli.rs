@@ -31,6 +31,81 @@ fn help_names_the_cap_and_the_version_flag() {
 }
 
 #[test]
+fn help_names_the_allow_term_flag_and_bundle_mode() {
+    let out = bin().arg("--help").output().unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("--allow-term"));
+    assert!(stdout.contains("bundle report"));
+}
+
+#[test]
+fn single_file_output_is_the_analyze_report_verbatim() {
+    let dir = std::env::temp_dir().join("slop-detector-cli-single");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("one.txt");
+    let text = "We delve into the numbers, not the narrative.";
+    std::fs::write(&path, text).unwrap();
+    let out = bin().arg(&path).output().unwrap();
+    std::fs::remove_file(&path).ok();
+    assert!(out.status.success());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let expected = serde_json::to_string_pretty(&slop_detector::analyze(text)).unwrap() + "\n";
+    assert_eq!(
+        stdout, expected,
+        "single-file output must stay byte-identical to analyze()"
+    );
+    assert!(
+        !stdout.contains("\"files\""),
+        "no bundle wrapper on one input"
+    );
+}
+
+#[test]
+fn two_files_produce_the_bundle_report() {
+    let dir = std::env::temp_dir().join("slop-detector-cli-bundle");
+    std::fs::create_dir_all(&dir).unwrap();
+    let shared = "Our platform unifies ingestion, storage, and search behind one \
+                  binding contract for every downstream team.";
+    let a = dir.join("a.txt");
+    let b = dir.join("b.txt");
+    std::fs::write(&a, format!("Variant one.\n\n{shared}\n")).unwrap();
+    std::fs::write(&b, format!("Variant two.\n\n{shared}\n")).unwrap();
+    let out = bin().arg(&a).arg(&b).output().unwrap();
+    std::fs::remove_file(&a).ok();
+    std::fs::remove_file(&b).ok();
+    assert!(out.status.success(), "{:?}", out.status);
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["files"].as_array().unwrap().len(), 2);
+    let cross = v["cross_file_duplication"].as_array().unwrap();
+    assert_eq!(cross.len(), 1, "{v}");
+    assert_eq!(cross[0]["occurrences"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn allow_term_flag_labels_matching_findings() {
+    let mut child = bin()
+        .arg("--allow-term")
+        .arg("delve")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"We delve into the numbers.")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let hit = &v["quality_patterns"][0];
+    assert_eq!(hit["rule_id"], "SLOP-A001");
+    assert_eq!(hit["topic_term"], true, "{v}");
+}
+
+#[test]
 fn over_cap_file_is_rejected_with_exit_40() {
     let dir = std::env::temp_dir().join("slop-detector-cli-test");
     std::fs::create_dir_all(&dir).unwrap();

@@ -310,6 +310,113 @@ fn contrastive_tail_is_silent_on_empty_np_and_directives() {
     }
 }
 
+// --- SD-Q004 abbreviation-period fix (the ai-slop C007 R6 class) ----------
+//
+// Before the fix, any `.` inside the NP scan closed the tail, so `U.S.`
+// produced the truncated false candidate `, not in the U.`, and the clause
+// walk-back treated an abbreviation period as a clause boundary, hiding
+// the imperative opener from the suppression classifier.
+
+#[test]
+fn contrastive_tail_abbreviation_mid_tail_no_longer_false_fires() {
+    // The exact R6 repro shape: the abbreviation-internal period plus the
+    // lowercase continuation (`U.S. but`) must not manufacture a
+    // candidate. The real tail scan then dies at the comma after Asia.
+    let text = "Adoption is concentrated, not in the U.S. but in Asia, where usage doubled.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q004"), 0, "{report:?}");
+    assert_span_invariant(text, &report);
+
+    // Without the trailing comma the tail parser reaches the terminal, and
+    // the word-bounded `but` in the NP rejects the tail: a not-X-but-Y
+    // continuation is SLOP-C008's pair territory, never a bare apophatic
+    // caveat.
+    let report = analyze("Adoption is concentrated, not in the U.S. but in Asia.");
+    assert_eq!(count(&report, "SD-Q004"), 0, "{report:?}");
+
+    // The but-rejection stands without any abbreviation in the tail.
+    let report = analyze("The team ships weekly, not monthly but quarterly.");
+    assert_eq!(count(&report, "SD-Q004"), 0, "{report:?}");
+}
+
+#[test]
+fn contrastive_tail_but_rejection_is_word_bounded() {
+    // A `but` substring inside a longer word is not a contrastive
+    // continuation: the tail still fires.
+    for (text, tail) in [
+        (
+            "The cache is shared, not distributed.",
+            ", not distributed.",
+        ),
+        (
+            "The fix targets the root cause, not the attributes.",
+            ", not the attributes.",
+        ),
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q004"), 1, "{text}: {report:?}");
+        let hit = report
+            .quality_patterns
+            .iter()
+            .find(|f| f.rule_id == "SD-Q004")
+            .unwrap();
+        assert_eq!(hit.snippet, tail, "{text}");
+    }
+}
+
+#[test]
+fn contrastive_tail_ending_in_abbreviation_fires_with_the_full_span() {
+    // Used to truncate at the abbreviation's first period (`, not the U.`).
+    let text = "The survey covers Europe, not the U.S.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q004"), 1, "{report:?}");
+    let hit = report
+        .quality_patterns
+        .iter()
+        .find(|f| f.rule_id == "SD-Q004")
+        .unwrap();
+    assert_eq!(hit.snippet, ", not the U.S.");
+    assert_span_invariant(text, &report);
+}
+
+#[test]
+fn contrastive_tail_eg_mid_np_fires_with_the_complete_span() {
+    // Mid-NP `e.g.` handled means CORRECT SPAN, not silence. The carrier
+    // avoids an imperative opener (a `Use the alias, ...` carrier is
+    // suppressed by the deny-list, so it cannot pin the NP behavior).
+    let text = "The docs cite the alias, not e.g. the raw path.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q004"), 1, "{report:?}");
+    let hit = report
+        .quality_patterns
+        .iter()
+        .find(|f| f.rule_id == "SD-Q004")
+        .unwrap();
+    assert_eq!(hit.snippet, ", not e.g. the raw path.");
+}
+
+#[test]
+fn contrastive_tail_clause_walkback_crosses_abbreviation() {
+    // The clause_start half of the fix: the walk-back crosses `U.S.` and
+    // recovers the whole clause, whose imperative opener suppresses the
+    // tail. Under the old walk-back the recovered clause was just `hosted
+    // mirror` and this sentence false-fired.
+    let report = analyze("Use the U.S. hosted mirror, not a pilot.");
+    assert_eq!(count(&report, "SD-Q004"), 0, "{report:?}");
+
+    // Non-directive control: crossing the abbreviation must not change the
+    // verdict on a clause that should fire.
+    let text = "The rollout targets the U.S. market, not a pilot.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q004"), 1, "{report:?}");
+    let hit = report
+        .quality_patterns
+        .iter()
+        .find(|f| f.rule_id == "SD-Q004")
+        .unwrap();
+    assert_eq!(hit.snippet, ", not a pilot.");
+}
+
 #[test]
 fn contrastive_negation_regex_triggers_fire() {
     for text in [
@@ -325,6 +432,111 @@ fn contrastive_negation_regex_triggers_fire() {
         assert!(count(&report, "SD-Q004") >= 1, "{text}: {report:?}");
         assert_span_invariant(text, &report);
     }
+}
+
+// --- SLOP-C008 contrastive-pair -------------------------------------------
+
+#[test]
+fn c008_pair_forms_fire_as_background() {
+    for text in [
+        // The infinitive pair.
+        "The position is not to dismiss breadth, but to require depth.",
+        // The wh-parallel pair.
+        "The question is not what they know, but how they value it.",
+        // The interpolated pair SD-Q004's tail parser excludes by design.
+        "Ship the fix, not the workaround, but tell support first.",
+        // The two-sentence reframe without a pronoun subject on sentence
+        // one.
+        "The port is not a rewrite. It is a shim over the old core.",
+    ] {
+        let report = analyze(text);
+        assert!(count(&report, "SLOP-C008") >= 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+}
+
+#[test]
+fn c008_stays_out_of_c001_and_c003_territory() {
+    for text in [
+        // Adverb-marked pair: SLOP-C001's shape.
+        "The rollout was not only fast but also cheap.",
+        "It is not just faster but safer.",
+        // Rather-than: SLOP-C003's shape (and its bare form is unloaded).
+        "We shipped weekly rather than monthly.",
+        // A bare comma-not tail with no pair: SD-Q004's shape.
+        "Findings judge house style, not authorship.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-C008"), 0, "{text}: {report:?}");
+    }
+}
+
+// --- SLOP-A005 metaphor-reach phrases -------------------------------------
+
+#[test]
+fn a005_idiom_families_fire_as_background() {
+    for text in [
+        "The data tells a more textured story about adoption.",
+        "This result is worth sitting with.",
+        "The invitation is to rethink the pipeline.",
+        "The metric serves as a canary for regressions.",
+        "It weaves together three subsystems.",
+        "Our roadmap remains our north star.",
+        "The findings form a rich tapestry of user behavior.",
+    ] {
+        let report = analyze(text);
+        assert!(count(&report, "SLOP-A005") >= 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+}
+
+#[test]
+fn a005_closed_boundaries_and_plain_prose_stay_silent() {
+    for text in [
+        // The probe's hazard pin: compass must never reach into
+        // compassion.
+        "Their approach serves as a compassionate model for teams.",
+        // No idiom shape.
+        "She wrote a story about the outage.",
+        // Single-token metaphors are deliberately not loaded.
+        "The mine's canary protocol is documented separately.",
+        "The beacon interval is 100 ms.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-A005"), 0, "{text}: {report:?}");
+    }
+}
+
+// --- SLOP-V004 agent-loop vocabulary --------------------------------------
+
+#[test]
+fn v004_lexicon_phrases_and_constructions_fire() {
+    // Every vendored lexicon phrase fires, word-bounded.
+    let rules = slop_detector::data::load().unwrap();
+    let v004 = rules.iter().find(|r| r.id == "SLOP-V004").unwrap();
+    for term in &v004.terms {
+        let text = format!("The check was rerun {term} without changes.");
+        let report = analyze(&text);
+        assert!(count(&report, "SLOP-V004") >= 1, "{term}: {report:?}");
+    }
+    // The two construction specimens from the harvested evidence.
+    for text in [
+        "Flagged for JJ: the digest moved between runs.",
+        "All three figures confirmed.",
+        "All 12 counts verified against the ledger.",
+    ] {
+        let report = analyze(text);
+        assert!(count(&report, "SLOP-V004") >= 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+}
+
+#[test]
+fn v004_lowercase_flagged_for_is_silent() {
+    // The case-sensitivity bound on the Flagged-for construction:
+    // lowercase mid-sentence process prose never fires.
+    let report = analyze("The commit was flagged for review by CI.");
+    assert_eq!(count(&report, "SLOP-V004"), 0, "{report:?}");
 }
 
 // --- individual class -----------------------------------------------------
