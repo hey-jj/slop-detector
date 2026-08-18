@@ -184,8 +184,17 @@ first and leaves structure standing.
 - `individual` findings read per hit, like residue. An assistant-voice
   phrase or a chat pleasantry in a received email is quotable evidence. A
   human replying in a live thread can use these sincerely, so weigh whether
-  the artifact has a conversational counterpart. Two rules in this class
+  the artifact has a conversational counterpart. Three rules in this class
   deserve their own reads:
+  - `SD-Q006` ledger-stamp (`ruled 2026-08-14`, `measured 2026-08-01`,
+    `the owner rules this on 2026-08-18`): a verdict verb directly against
+    a bare ISO date is how agent pipelines stamp record rows, and the
+    diction travels on paste. Both arms require the date, and the verb set
+    excludes the transactional `confirmed`, `verified`, and `resolved`,
+    which stamp everyday ops mail. The prose form with a preposition and
+    release-date diction never fire. A forwarded decision record carries
+    the shape legitimately, so read each hit against the document's
+    purpose.
   - `SLOP-V004` agent-loop vocabulary (`this turn`, `as requested`,
     `point me at`, sentence-initial `Flagged for`): the sentence addresses
     an orchestrator or a drafting loop, and the document that carries it

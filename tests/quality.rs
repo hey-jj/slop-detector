@@ -675,3 +675,44 @@ fn formulaic_prose_reports_across_classes_deterministically() {
     });
     assert_eq!(report.quality_patterns, sorted);
 }
+
+// --- SD-Q006 ledger-stamp -------------------------------------------------
+
+#[test]
+fn q006_ledger_stamps_fire_per_hit() {
+    let text = "The owner rules this on 2026-08-18. The floor was measured 2026-08-01 and the case adjudicated 2026-07-30.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q006"), 3, "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+#[test]
+fn q006_both_arms_require_the_date() {
+    // The dateless owner phrase was cut: ordinary English produces
+    // "rules this way" and "ruled this out".
+    for text in [
+        "The owner ruled this after the second sweep.",
+        "The owner ruled this out after the inspection.",
+        "If the owner rules this way, we ship Friday.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q006"), 0, "{text}: {report:?}");
+    }
+}
+
+#[test]
+fn q006_transactional_verbs_are_not_carried_inbound() {
+    // confirmed/verified/resolved with a date are everyday ops mail; the
+    // inbound verb set is narrower than SLOP-V005 by design.
+    let text = "Payment confirmed 2026-08-14 and the invoice verified 2026-08-15; the ticket was resolved 2026-08-16.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q006"), 0, "{report:?}");
+}
+
+#[test]
+fn q006_release_diction_and_prose_date_forms_are_silent() {
+    let text = "Released 2026-08-18 with two fixes. The survey was measured on 2026-08-01. The board resolved 2026 budget items. The build was measured 2026-99-99.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q006"), 0, "{report:?}");
+    assert_span_invariant(text, &report);
+}

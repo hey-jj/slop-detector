@@ -524,6 +524,7 @@ mod tests {
             "SD-R003",
             "SD-R004",
             "SLOP-J001",
+            "SD-J001",
         ];
         // The quality rules.
         let quality = [
@@ -560,6 +561,7 @@ mod tests {
             "SLOP-S003",
             "SD-Q003",
             "SD-Q005",
+            "SD-Q006",
         ];
         let expected: Vec<&str> = residue.iter().chain(quality.iter()).copied().collect();
         assert_eq!(ids, expected);
@@ -633,6 +635,7 @@ mod tests {
             "SLOP-S003",
             "SD-Q003",
             "SD-Q005",
+            "SD-Q006",
         ] {
             assert_eq!(class_of(id), Some(Class::Individual), "{id}");
         }
