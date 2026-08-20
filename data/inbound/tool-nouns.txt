@@ -1,0 +1,32 @@
+# The shared tool-noun set. One definition, referenced by both clause-shape
+# rules: SD-Q007 builds its closed subjects from it, and SD-Q008 anchors its
+# markers on it. Singular and plural forms both load, because a sentence
+# naming the rules or the findings as a set is the ordinary case.
+tool
+tools
+linter
+linters
+crate
+crates
+rule
+rules
+check
+checks
+gate
+gates
+detector
+detectors
+guard
+guards
+report
+reports
+finding
+findings
+score
+scores
+output
+outputs
+result
+results
+test
+tests

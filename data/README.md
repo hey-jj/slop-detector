@@ -14,6 +14,8 @@ computes the value at its own build, and nobody hand-writes it.
 `inbound/` is the slop-detector selection: `inbound.toml` is the loaded rule
 table (id, category, mechanism, lexicon or patterns, boundary mode, per-rule
 thresholds, guard text), and the `.txt` files beside it are the lexicons carried
-from the vendored data with edits. Rules carried unchanged reference `words/`
+from the vendored data with edits, plus `tool-nouns.txt`, which is
+slop-detector's own and is the one definition `SD-Q007` and `SD-Q008` both
+name. Rules carried unchanged reference `words/`
 directly from `inbound.toml`. Every loaded pattern lives in this directory or in
 a file `inbound.toml` names. No pattern is hard-coded.

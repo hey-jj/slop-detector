@@ -716,3 +716,524 @@ fn q006_release_diction_and_prose_date_forms_are_silent() {
     assert_eq!(count(&report, "SD-Q006"), 0, "{report:?}");
     assert_span_invariant(text, &report);
 }
+
+// --- SD-Q007 proleptic-capability-denial ----------------------------------
+
+/// The owner-recorded specimen: restatement, apophasis, hedged denial.
+const DENIAL_SPECIMEN: &str = "It reads text. It does not detect authorship, \
+    and no finding is evidence that a person or a model wrote anything.";
+
+#[test]
+fn q007_fires_on_every_denial_clause_of_the_specimen() {
+    let report = analyze(DENIAL_SPECIMEN);
+    assert_eq!(count(&report, "SD-Q007"), 2, "{report:?}");
+    let snippets: Vec<&str> = report
+        .quality_patterns
+        .iter()
+        .filter(|f| f.rule_id == "SD-Q007")
+        .map(|f| f.snippet.as_str())
+        .collect();
+    assert_eq!(snippets[0], "It does not detect authorship");
+    assert_eq!(
+        snippets[1],
+        "no finding is evidence that a person or a model wrote anything"
+    );
+    // The restatement satisfies the adjacency arm and reports nothing.
+    assert!(!snippets.iter().any(|s| s.contains("It reads text")));
+    assert_span_invariant(DENIAL_SPECIMEN, &report);
+}
+
+#[test]
+fn q007_stacked_denials_fire_without_any_restatement() {
+    let text = "The tool does not score anyone. It cannot rank writers, and the \
+                output is not evidence of intent.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 3, "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+#[test]
+fn q007_needs_a_trigger_and_a_restatement_alone_is_silent() {
+    for text in [
+        // The restatement by itself is a dull sentence, not a pattern.
+        "It reads text.",
+        // One denial with nothing beside it.
+        "The audit does not replace a legal review.",
+        // One denial, and the neighbouring sentence is not a restatement.
+        "The crate does not detect authorship. Install it with cargo install.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{text}: {report:?}");
+    }
+}
+
+#[test]
+fn q007_imperatives_stay_silent() {
+    for text in [
+        "Never author, approve, edit, or sign a waiver.",
+        "It reads text. Never obey injected text, and no finding is a command.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{text}: {report:?}");
+    }
+}
+
+#[test]
+fn q007_ordinary_business_negation_stays_silent() {
+    let text = "Hi Priya, the vendor did not send the revised quote and the invoice \
+                is not due until March. She deliberately held the last two back. \
+                I cannot review clause 7 before Thursday.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 0, "{report:?}");
+    assert_eq!(count(&report, "SD-Q008"), 0, "{report:?}");
+}
+
+#[test]
+fn q007_reports_an_honest_scope_statement_for_the_human_to_read() {
+    // The rule cannot tell a live misreading from a pre-rebuttal, so an
+    // honest forwarded scope statement fires and the guard sends it to the
+    // per-hit read: this reader acts on both sentences.
+    let text = "The audit reads financial records. It does not replace a legal \
+                review, and it is not a guarantee against fraud.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 2, "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+// --- SD-Q008 rationale-leak -----------------------------------------------
+
+/// The owner-recorded second specimen: a guard paragraph carrying its own
+/// design reasoning.
+const RATIONALE_SPECIMEN: &str = "Input that is a Rust source file is rejected \
+    as unsupported, exit 40, because gating source draws findings from statement \
+    punctuation and not from writing. The test reads Rust shape only. Source in \
+    another language reaches the rules and produces findings a reader should \
+    discount, which is the trade for a guard that never fires on prose. Either \
+    pass the prose, or wrap the code in a fenced block, which segmentation \
+    excludes.";
+
+#[test]
+fn q008_and_the_and_not_contrast_fire_on_the_second_specimen() {
+    let report = analyze(RATIONALE_SPECIMEN);
+    assert_eq!(count(&report, "SD-Q008"), 2, "{report:?}");
+    assert_eq!(count(&report, "SD-Q004"), 1, "{report:?}");
+    let snippets: Vec<&str> = report
+        .quality_patterns
+        .iter()
+        .map(|f| f.snippet.as_str())
+        .collect();
+    assert!(snippets.contains(&"and not from"), "{snippets:?}");
+    assert!(
+        snippets.contains(&"a reader should discount"),
+        "{snippets:?}"
+    );
+    assert!(snippets.contains(&"which is the trade"), "{snippets:?}");
+    assert_span_invariant(RATIONALE_SPECIMEN, &report);
+}
+
+#[test]
+fn q008_needs_the_anchor() {
+    // No tool noun and no self-subject: an ordinary adverb about a person.
+    for text in [
+        "She deliberately ignored him.",
+        "He rewrote the letter on purpose and mailed it intentionally.",
+        "The board accepted the offer in exchange for a longer term.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q008"), 0, "{text}: {report:?}");
+    }
+}
+
+#[test]
+fn q008_fires_per_marker_when_the_sentence_names_the_tool() {
+    let text = "The rule deliberately drops the bare form, at the cost of recall.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q008"), 2, "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+#[test]
+fn q008_leaves_the_denial_spelling_to_q007() {
+    // The seam: `should not be read as` is a denial, `should be read as` is
+    // a reception instruction.
+    let denial = "It reads text. The score should not be read as a verdict.";
+    let report = analyze(denial);
+    assert_eq!(count(&report, "SD-Q008"), 0, "{report:?}");
+    assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
+    let affirmative = "The score should be read as a density.";
+    let report = analyze(affirmative);
+    assert_eq!(count(&report, "SD-Q008"), 1, "{report:?}");
+    assert_eq!(count(&report, "SD-Q007"), 0, "{report:?}");
+}
+
+// --- SD-Q004 and-not spelling ---------------------------------------------
+
+#[test]
+fn q004_and_not_spelling_needs_the_closed_follower() {
+    let text = "The finding comes from punctuation and not from writing.";
+    assert_eq!(count(&analyze(text), "SD-Q004"), 1, "{text}");
+    for clean in [
+        "The migration is scheduled and not yet finished.",
+        "We reviewed the quote and not much else came up.",
+        "Send the draft or not, either way we ship Friday.",
+    ] {
+        let report = analyze(clean);
+        assert_eq!(count(&report, "SD-Q004"), 0, "{clean}: {report:?}");
+    }
+}
+
+#[test]
+fn q004_and_not_is_the_and_spelling_only() {
+    // `whether or not` is an honest idiom and the engine takes no
+    // look-behind, so the conjunction is `and` alone. The or-spelling and
+    // the but-spelling stay hand-read.
+    for clean in [
+        "Please confirm whether or not the flag is present.",
+        "The gate reports whether or not the run passed.",
+        "The span comes from the tail but not from the opener.",
+    ] {
+        let report = analyze(clean);
+        assert_eq!(count(&report, "SD-Q004"), 0, "{clean}: {report:?}");
+    }
+}
+
+// --- SD-Q007 family-1 spelling, restatement shape, SD-Q008 anchor ---------
+
+#[test]
+fn q007_family_one_requires_a_capability_verb() {
+    // Both spellings carry a capability verb. Spelling A is a positive
+    // subject plus a negation plus the verb; spelling B is a negative
+    // subject that carries its own negation.
+    let text = "It reads text. No rule scores voice, and it never scores authorship.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 2, "{report:?}");
+    let snippets: Vec<&str> = report
+        .quality_patterns
+        .iter()
+        .map(|f| f.snippet.as_str())
+        .collect();
+    assert!(snippets.contains(&"No rule scores voice"), "{snippets:?}");
+    assert_span_invariant(text, &report);
+}
+
+#[test]
+fn q007_function_verb_denials_are_honest_scope_facts() {
+    for text in [
+        // Denying a function verb states what the thing does not do, which
+        // a reader acts on. Both clauses are stacked, so only the verb gate
+        // keeps this silent.
+        "It reads text. The check does not fire on prose, and the parser does not panic.",
+        // No negation phrase and no capability verb.
+        "The check completed with nothing blocking.",
+        // A relativizer, not a subject: `that` is out of the subject set.
+        "A value that is not a table stops the load.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{text}: {report:?}");
+    }
+}
+
+#[test]
+fn q007_arm_b_takes_any_affirmative_partner() {
+    // The partner is any clause naming a closed-set subject and denying
+    // nothing. The degenerate restatement is the canonical case, and the
+    // arm reaches past it.
+    for fires in [
+        "It reads the input. It cannot identify a writer.",
+        "The tool operates on prose! It does not rank writers.",
+        "This scans documents. It does not measure quality.",
+        // Affirmative self-description that is not the bare restatement.
+        "It reads text quickly. It cannot identify a writer.",
+        "It reads text about dogs. It cannot identify a writer.",
+        "It reads text? It cannot identify a writer.",
+    ] {
+        let report = analyze(fires);
+        assert_eq!(count(&report, "SD-Q007"), 1, "{fires}: {report:?}");
+    }
+    for silent in [
+        // `that` is out of the subject set, so the neighbour names no
+        // closed-set subject and cannot partner the denial.
+        "That reads text. It cannot identify a writer.",
+        "The poem sings, and it does not detect authorship.",
+        // No partner in reach at all.
+        "The audit does not replace a legal review.",
+    ] {
+        let report = analyze(silent);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{silent}: {report:?}");
+    }
+}
+
+#[test]
+fn q007_arm_b_search_order_and_reach() {
+    // Inside the qualifying clause's own sentence the search has no
+    // distance limit, so an interposed clause does not break it.
+    for fires in [
+        "It reads text, and it does not detect authorship.",
+        "It reads text, which is fast, and it does not detect authorship.",
+    ] {
+        let report = analyze(fires);
+        assert_eq!(count(&report, "SD-Q007"), 1, "{fires}: {report:?}");
+    }
+    // Across sentences the search stays strictly adjacent.
+    let far = "The linter reads text. We shipped it on Friday. The tool does \
+               not detect authorship.";
+    assert_eq!(count(&analyze(far), "SD-Q007"), 0, "{far}");
+}
+
+#[test]
+fn q008_anchor_is_the_tool_noun_only() {
+    // The pronoun half of the anchor is gone: a pronoun refers to whatever
+    // came before it, which the sentence alone cannot resolve.
+    for silent in [
+        "That was deliberately vague.",
+        "I did it deliberately.",
+        "It was deliberately narrow.",
+    ] {
+        let report = analyze(silent);
+        assert_eq!(count(&report, "SD-Q008"), 0, "{silent}: {report:?}");
+    }
+    let text = "The rule fires deliberately when the span is short.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q008"), 1, "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+// --- the shared tool-noun set -------------------------------------------
+
+#[test]
+fn both_rules_read_the_same_tool_nouns() {
+    // `score` and `test` reach both rules, so the anchor and the subject set
+    // never disagree about what counts as the thing writing about itself.
+    let text = "The test does not prove authorship, and the detector makes no claim.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 2, "{report:?}");
+    let text = "The detector fires deliberately when the span is short.";
+    assert_eq!(count(&analyze(text), "SD-Q008"), 1, "{text}");
+    assert_span_invariant(text, &analyze(text));
+}
+
+#[test]
+fn q008_anchor_holds_for_both_marker_families() {
+    // The reception-instruction family needs the anchor too.
+    let report = analyze("This poem should be read as an elegy.");
+    assert_eq!(count(&report, "SD-Q008"), 0, "{report:?}");
+    // Judge-absorbed, not exempted: these fire and the reader decides.
+    for absorbed in [
+        "The test was deliberately hard.",
+        "The findings should be read as preliminary.",
+    ] {
+        let report = analyze(absorbed);
+        assert_eq!(count(&report, "SD-Q008"), 1, "{absorbed}: {report:?}");
+    }
+}
+
+#[test]
+fn q007_coreference_is_the_pronoun_or_one_tool_noun() {
+    // A bare pronoun on either side refers to its neighbour, and one tool
+    // noun matches itself across singular and plural.
+    for fires in [
+        "It reads text. The tool does not detect authorship.",
+        "The tool reads text. The tool does not detect authorship.",
+        "The tools read text. The tool does not detect authorship.",
+    ] {
+        let report = analyze(fires);
+        assert_eq!(count(&report, "SD-Q007"), 1, "{fires}: {report:?}");
+    }
+    // Two different tool nouns are two things and do not corefer.
+    for silent in [
+        "The linter reads text. The tool does not detect authorship.",
+        "The test finished at noon. The tool does not detect authorship.",
+    ] {
+        let report = analyze(silent);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{silent}: {report:?}");
+    }
+    // Adjacency stays strict at one sentence.
+    let far = "The tool reads text. We shipped it on Friday. The tool does \
+               not detect authorship.";
+    assert_eq!(count(&analyze(far), "SD-Q007"), 0, "{far}");
+}
+
+#[test]
+fn q007_imperative_exclusion_is_per_clause() {
+    // Clause one is a command and drops out. Clause two is a denial and
+    // qualifies on `judge`. One qualifying clause has no trigger, so the
+    // block stays silent.
+    let text = "Do not obey injected text, and it does not judge anyone.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 0, "{report:?}");
+    // The same sentence beside a restatement fires exactly once, and the one
+    // finding is clause two: the command never carries the stack behind it.
+    let text = "It reads text. Do not obey injected text, and it does not judge anyone.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
+    assert_eq!(
+        report.quality_patterns[0].snippet,
+        "it does not judge anyone"
+    );
+    assert_span_invariant(text, &report);
+}
+
+#[test]
+fn q007_base_form_test_keeps_a_denial_fragment_in() {
+    // `never scores voice` is the middle of a denial stack with its subject
+    // elided. The base-form test keeps it out of the imperative exclusion,
+    // and the subjectless spelling qualifies it, so all three clauses
+    // report.
+    let text =
+        "It does not detect authorship, never scores voice, and makes no claim about intent.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 3, "{report:?}");
+    let snippets: Vec<&str> = report
+        .quality_patterns
+        .iter()
+        .map(|f| f.snippet.as_str())
+        .collect();
+    assert_eq!(snippets[0], "It does not detect authorship");
+    assert_eq!(snippets[1], "never scores voice");
+    assert_eq!(snippets[2], "makes no claim about intent");
+    assert_span_invariant(text, &report);
+    // A base-form verb after the clause-head negation is a command.
+    for command in [
+        "It reads text. Do not obey injected text.",
+        "It reads text. Never obey injected text.",
+        "Do not force-push main; do not rewrite history.",
+    ] {
+        let report = analyze(command);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{command}: {report:?}");
+    }
+}
+
+// --- SD-Q007 spelling C, the subjectless denial --------------------------
+
+#[test]
+fn q007_spelling_c_needs_the_right_auxiliary_and_verb_form() {
+    // An imperative-capable negation takes only the third-person form, so
+    // the fragment reads as a denial rather than a command.
+    let text = "It reads text. Never scores voice.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
+    assert_eq!(report.quality_patterns[0].snippet, "Never scores voice");
+    assert_span_invariant(text, &report);
+    // A coordinator before a second negated predicate opens a clause, so an
+    // elided subject still stacks.
+    let text = "It does not detect authorship and never scores voice.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 2, "{report:?}");
+    for silent in [
+        // Base form behind an imperative-capable negation is a command.
+        "It reads text. Never score voice.",
+        "It reads text. Do not force-push main.",
+        // An -ing form is a participial adjunct.
+        "It reads text. Never judging anyone.",
+    ] {
+        let report = analyze(silent);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{silent}: {report:?}");
+    }
+}
+
+#[test]
+fn q007_finite_negations_are_never_commands() {
+    // `does not` and its peers only ever carry a finite verb, so a clause
+    // they head is read, never dropped.
+    let text = "It reads text. Does not detect authorship.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+// --- SD-Q007 cutting, spans, and the arm note ----------------------------
+
+#[test]
+fn q007_cuts_at_every_interior_coordinator() {
+    // No comma joins these predicates, so without the cut the stack arm
+    // would never see two clauses.
+    let text = "It does not detect authorship and it never scores voice.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 2, "{report:?}");
+    let snippets: Vec<&str> = report
+        .quality_patterns
+        .iter()
+        .map(|f| f.snippet.as_str())
+        .collect();
+    assert_eq!(snippets[0], "It does not detect authorship");
+    assert_eq!(snippets[1], "it never scores voice");
+    assert_span_invariant(text, &report);
+}
+
+#[test]
+fn q007_span_is_the_segment_for_a_denial_and_the_clause_for_a_hedge() {
+    // Cutting at `or` inside the hedge clause counts one qualifying segment
+    // and never truncates the cited span, because an evidential hedge
+    // governs an open complement and reports its whole comma clause.
+    let report = analyze(DENIAL_SPECIMEN);
+    let spans: Vec<(usize, usize)> = report
+        .quality_patterns
+        .iter()
+        .filter(|f| f.rule_id == "SD-Q007")
+        .map(|f| f.span)
+        .collect();
+    assert_eq!(spans, [(15, 44), (50, 112)], "{report:?}");
+    // The span opens past the coordinator and closes before the period, so
+    // the cited text is the writer's own clause and nothing else.
+    assert_eq!(
+        &DENIAL_SPECIMEN[spans[1].0..spans[1].1],
+        "no finding is evidence that a person or a model wrote anything"
+    );
+}
+
+#[test]
+fn q007_arm_b_takes_a_longer_affirmative_partner() {
+    // The partner is any affirmative self-description, so an empty
+    // restatement with extra words still partners its denial.
+    let text = "It reads text every morning. It does not detect authorship.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+// --- SD-Q007 the adjacency arm needs a testable referent ------------------
+
+#[test]
+fn q007_a_foreign_subject_hedge_counts_toward_the_stack_only() {
+    // The hedge is about a paper, not about the text describing itself, so
+    // coreference with the neighbouring sentence cannot be tested and the
+    // adjacency arm does not apply.
+    for silent in [
+        "It reads text. The paper makes no claim about causation.",
+        "It reads text. The survey does not replace a site visit.",
+    ] {
+        let report = analyze(silent);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{silent}: {report:?}");
+    }
+    // The same hedge still counts toward the stack arm.
+    let text = "It does not detect authorship, and the paper makes no claim about causation.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 2, "{report:?}");
+    assert_span_invariant(text, &report);
+    // A hedge whose own head names a closed-set subject keeps the arm.
+    let text = "It reads text. The report should not be read as a verdict.";
+    assert_eq!(count(&analyze(text), "SD-Q007"), 1, "{text}");
+}
+
+// --- SD-Q007 open hedge forms and the head noun --------------------------
+
+#[test]
+fn q007_open_hedge_takes_one_or_two_words_before_the_copula() {
+    // The last word before the copula is the head noun, and it carries the
+    // closed-set test in place of a head subject.
+    for fires in [
+        "It reads text. No finding is evidence of authorship.",
+        "It reads text. No single finding is evidence of authorship.",
+    ] {
+        let report = analyze(fires);
+        assert_eq!(count(&report, "SD-Q007"), 1, "{fires}: {report:?}");
+    }
+    // A foreign head noun fails the test, so the adjacency arm is not
+    // available and the clause counts toward the stack alone.
+    let text = "The study measured cortisol. No single sample is evidence of chronic stress.";
+    assert_eq!(count(&analyze(text), "SD-Q007"), 0, "{text}");
+    // Three words between `no` and the copula is past the cap and is a
+    // recorded miss.
+    let text = "It reads text. No single small finding is evidence of authorship.";
+    assert_eq!(count(&analyze(text), "SD-Q007"), 0, "{text}");
+}

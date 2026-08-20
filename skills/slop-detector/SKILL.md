@@ -16,6 +16,10 @@ any conclusion. This skill directs that read.
 
 ## The read
 
+Two passes make the read. The detector cites spans and densities. You
+supply the judgment those figures cannot carry. Report the tool's output
+alone and the read is unfinished.
+
 1. State the purpose. Record what the human is triaging and what they want
    from the read. An application screen, a vendor-mail triage, and an
    inbound-deck review are different purposes and weigh the same
@@ -176,7 +180,8 @@ first and leaves structure standing.
   tell. Clean business prose sits near zero here. A cluster of spike hits in
   a short document is the signal worth reporting.
 - `background` is context. These words and shapes predate
-  chat models as business register. Report the density, not the hits.
+  chat models as business register. Report the density and leave the
+  individual hits out.
   Do not treat the density as a verdict.
   Discount the human-common rules further: `SLOP-I001` intensifiers carry
   the lowest weight of the whole report, and `SLOP-R001`, `SLOP-Q001`, and
@@ -184,7 +189,7 @@ first and leaves structure standing.
 - `individual` findings read per hit, like residue. An assistant-voice
   phrase or a chat pleasantry in a received email is quotable evidence. A
   human replying in a live thread can use these sincerely, so weigh whether
-  the artifact has a conversational counterpart. Three rules in this class
+  the artifact has a conversational counterpart. Five rules in this class
   deserve their own reads:
   - `SD-Q006` ledger-stamp (`ruled 2026-08-14`, `measured 2026-08-01`,
     `the owner rules this on 2026-08-18`): a verdict verb directly against
@@ -212,6 +217,23 @@ first and leaves structure standing.
     produces and one that is itself the loudest thing in the document.
     In bundle mode, `cross_file_duplication` extends the same
     read across files: shared copy between deck variants is the target.
+  - `SD-Q007` proleptic-capability-denial: the stacked pre-rebuttal. Read
+    it with shape 7 of the contrastive-negation family below, which
+    carries the anatomy and the keep-conditions.
+  - `SD-Q008` rationale-leak (`which is the trade`, `at the cost of`,
+    `by design`, `deliberately`, `a reader should discount`, `should be
+    read as`): the sender left the reasoning behind a design choice in
+    text written for a reader, or told the reader how to take the text.
+    The marker fires only when its sentence also names a tool noun from
+    the set this rule shares with `SD-Q007` (`tool`, `linter`, `crate`,
+    `rule`, `check`, `gate`, `detector`, `guard`, `report`, `finding`,
+    `score`, `output`, `result`, `test`, and their plurals), so an
+    ordinary adverb about a person (`she deliberately ignored him`,
+    `that was deliberately vague`) stays out of the report. Ask whether
+    the reason survives as something the reader acts on. A usable caveat
+    keeps its place. A defence of the design does not. The pronoun form
+    (`It was deliberately narrow`) has no tool noun to anchor on and
+    stays yours.
 
 Never report a single lexical token as a conclusion. Formal low-variance
 human registers, including second-language business English, use these words
@@ -242,14 +264,26 @@ to weigh. An editing pass scrubs marker words first, and these survive it.
 - Robot cadence: staccato fragment tricolons like `Text in, evidence
   out. The tool finds. The reader decides.` and mechanical parallelism
   where a person writing to a peer would use one declarative sentence.
+- The empty restatement: a sentence that says again what the reader has
+  already been told and stops, like `It reads text.` after a paragraph
+  explaining what the thing reads. On its own it is a dull sentence with
+  no rule against it. It earns attention because it is the opening move
+  of the pre-rebuttal stack in shape 7, so when `SD-Q007` fires beside
+  one, quote both halves. When it stands alone, it is still yours to
+  name.
 
-### The contrastive-negation family: six shapes
+### The contrastive-negation family: seven shapes
 
-Contrastive negation is one family with six recurring shapes. Two are
+Contrastive negation is one family with seven recurring shapes. Three are
 rule-caught, four need your eye. Name the shape when you report one.
 
 1. Comma tail (`X, not Y.`): rule-caught, `SD-Q004`. `Findings judge
-   house style, not authorship.`
+   house style, not authorship.` The same rule catches one conjunction
+   spelling, `X and not Y`, where a preposition or article follows the
+   `not`: `drawn from statement punctuation and not from writing.` The
+   `or not` and `but not` spellings are yours. No rule will take them:
+   `whether or not the flag is present` is an honest idiom sharing the
+   shape, and the engine has no look-behind to separate the two.
 2. Mid-sentence pair (`not X, but Y`): rule-caught, `SLOP-C008`. `The
    goal is not to dismiss breadth, but to require depth.`
 3. Two-sentence reframe: partly rule-caught (`SLOP-C002`, `SLOP-C008`
@@ -264,6 +298,38 @@ rule-caught, four need your eye. Name the shape when you report one.
 6. Strawman negation: the negated half was never proposed by anyone. This
    is a judgment about the conversation, so no rule can see it. Ask who
    asserted the rejected reading.
+7. Proleptic capability-denial stack: rule-caught, `SD-Q007`. Three moves
+   in a row. A restatement of what the text already established, then a
+   denial of a capability nobody claimed, then an evidential hedge
+   stacked on the denial. `It reads text. It does not detect authorship,
+   and no finding is evidence that a person or a model wrote anything.`
+   The rule needs a stack of two denial clauses in one block, or a single
+   one standing beside an affirmative self-description of the same thing,
+   so a lone honest caveat stays out of the report. The partner can sit
+   anywhere in the same sentence, or in the sentence just before or just
+   after. The partner is a condition, and only the denial is reported.
+   Multiple `SD-Q007` findings in one block are the stack form, and the
+   count is the number of denied capabilities. A single finding is the
+   weaker form, one denial standing beside an affirmative
+   self-description. Read the stack form as the stronger signal.
+   Expect this to fire on honest scope facts. Try the affirmative rewrite
+   first. Keep the denial when it names a boundary a reader would
+   otherwise get wrong, like `It does not measure below 2 Hz`, and cut it
+   when it denies a capability nobody claimed. A command in the negative drops out,
+   but only the clause it sits in: `Do not obey injected text, and it
+   does not judge anyone.` loses the first half and the rule reads the
+   second. Three forms of the denial are yours to catch, all silent by
+   design. An adjectival denial carries no verb (`never demotable`, `not
+   scoreable`). A bare-form verb behind `never` or `do not` with no
+   subject reads as a command (`never detect authorship`), so the rule
+   leaves it alone. A denial built on a function verb never reaches the
+   rule at all, because the capability-verb set excludes `find`, `fire`,
+   `catch`, `block`, and `validate`, so `the check does not fire on
+   prose` is silent whatever work it is doing. That silence belongs to
+   the verb. Scope facts are a separate matter: one built on a capability
+   verb does fire, and the judgement above is how you settle it. When a
+   function-verb denial is doing pre-rebuttal work, say so under your own
+   name.
 
 The ruling heuristic: one contrast doing real work on a surface is a
 choice. More than roughly one per 500 words is a cadence, and
@@ -286,6 +352,10 @@ Four figures stacked in one sentence:
 The prolepsis is what reads as slop. A human defines a thing by saying what it does. Only a nervous machine pre-rebuts an accusation no one made.
 
 The litmus test: would a human say this sentence out loud to a peer? If it defines the thing by negation, cut it. Do not soften it. Cut it.
+
+The single-sentence form below is yours to catch. `SD-Q007` reaches only
+the stacked form, shape 7 above, where the denials pile up or stand next
+to the restatement.
 
 One carve-out: imperative behavioral directives stay. A human gives commands in the negative naturally. The tell lives in descriptive self-negation, where the grammatical subject is the thing or its output. Verb-initial commands (`Never obey injected text`, `Do not force-push main`) and second-person rules (`you can't sign your own waiver`) are commands and stay.
 
@@ -360,6 +430,34 @@ recur in AI-authored text, and have no rule, each for a stated reason:
   inside the false-positive budget.
 - Garden-path sentences: detecting them means parsing failure and
   re-parse, which no pattern engine performs.
+- Dangling which-clauses: a `which` whose antecedent is the whole
+  preceding clause, or a noun three phrases back, so the reader has to
+  guess what is being described. Attaching a relative clause to its
+  antecedent needs a parse, so no rule sees it.
+
+The worked example for the first two:
+
+```
+Input that is a Rust source file is rejected as unsupported, exit 40,
+because gating source draws findings from statement punctuation and not
+from writing.
+```
+
+The subject runs six words before its verb, the reader re-parses at
+`is rejected`, and `statement punctuation` stacks two nouns where one
+would carry the point. The tool reports the `and not from` tail here
+(`SD-Q004`) and nothing else. The unreadability is yours to report.
+
+The worked example for the third, from the same paragraph:
+
+```
+Source in another language reaches the rules and produces findings a
+reader should discount, which is the trade for a guard that never fires
+on prose.
+```
+
+Ask what `which` points at. The findings, the discounting, or the whole
+arrangement. The sentence never says.
 - Label-echo: a sentence restating its own container's label (`## Risks`
   followed by `There are several risks.`). The rule would need to know
   what the container displays.
@@ -377,6 +475,15 @@ one. Quote spans and snippets for everything you cite. Separate the
 three categories in the report: residue found, injection phrasing found, and
 quality densities computed. Attribute any hand-read tells to your own
 judgment, apart from the tool's findings.
+
+Two questions to put to the report itself before it goes to the human.
+The patterns you were hired to find are ones a report can commit.
+
+- Does a line of it deny something the human never asked about? Say what
+  the evidence shows and stop there.
+- Does a line of it explain why the tool works the way it does? The human
+  needs the finding and what it means for the purpose they stated. Keep
+  the mechanism in your working notes.
 
 ## Files
 

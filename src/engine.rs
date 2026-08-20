@@ -58,6 +58,93 @@ pub struct Compiled {
     /// Self-duplication rules (SD-Q005): rule index plus the shingle
     /// order, run floor, and emission cap in words.
     pub(crate) duplication_rules: Vec<DuplicationRule>,
+    /// Capability-denial rules (SD-Q007).
+    pub(crate) denial_rules: Vec<DenialRule>,
+    /// Rationale-leak rules (SD-Q008).
+    pub(crate) rationale_rules: Vec<RationaleRule>,
+}
+
+/// One compiled capability-denial rule. Every phrase is tokenized at build
+/// time by the same tokenizer the scan runs over the source, so a phrase and
+/// the text it matches split identically (`trade-off` is two tokens on both
+/// sides). Each subject set is its standalone subjects plus every determiner
+/// phrase completed by a tool noun.
+pub(crate) struct DenialRule {
+    rule: usize,
+    /// Positive subjects, which need a following negation.
+    subjects: Vec<Vec<String>>,
+    /// Negative subjects, which carry the negation themselves.
+    negative_subjects: Vec<Vec<String>>,
+    /// The pronoun half of the subject set. A pronoun standing next to a
+    /// noun-phrase subject refers back to it, so the adjacency arm reads the
+    /// two as one referent.
+    pronouns: HashSet<String>,
+    coordinators: HashSet<String>,
+    /// Negations that can open a command.
+    imperative_negations: Vec<Vec<String>>,
+    /// Negations that only ever carry a finite verb.
+    finite_negations: Vec<Vec<String>>,
+    window: usize,
+    verb_window: usize,
+    /// Every capability-verb form, for the two spellings that carry a subject.
+    capability_verbs: HashSet<String>,
+    /// The base and third-person forms, which the subjectless spelling takes
+    /// behind a finite-only negation.
+    capability_finite: HashSet<String>,
+    /// The third-person forms alone, which are all the subjectless spelling
+    /// takes behind an imperative-capable negation.
+    capability_third: HashSet<String>,
+    hedges: Vec<Vec<String>>,
+    /// The shared tool-noun set, kept for the adjacency arm's referent test.
+    tool_nouns: HashSet<String>,
+}
+
+/// One compiled rationale-leak rule: the marker phrases plus the tool-noun
+/// anchor.
+pub(crate) struct RationaleRule {
+    rule: usize,
+    markers: Vec<Vec<String>>,
+    tool_nouns: HashSet<String>,
+}
+
+/// Split a phrase into the same tokens the scan produces from source text.
+fn phrase_tokens(phrase: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for c in phrase.chars() {
+        let c = if c == '\u{2019}' { '\'' } else { c };
+        if c.is_alphanumeric() || c == '\'' || c == '*' {
+            cur.push(c.to_ascii_lowercase());
+        } else if !cur.is_empty() {
+            out.push(std::mem::take(&mut cur));
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// A closed subject set: the standalone subjects, then every determiner
+/// phrase completed by a tool noun. A determiner may itself be several words
+/// (`none of the`).
+fn subject_set(
+    subjects: &[String],
+    determiners: &[String],
+    tool_nouns: &[String],
+) -> Vec<Vec<String>> {
+    let mut out: Vec<Vec<String>> = subjects.iter().map(|s| phrase_tokens(s)).collect();
+    for d in determiners {
+        for n in tool_nouns {
+            let mut phrase = phrase_tokens(d);
+            phrase.push(n.clone());
+            out.push(phrase);
+        }
+    }
+    // Longest first, so `the tool` wins over a bare pronoun at the same
+    // position and the recorded subject is the whole phrase.
+    out.sort_by_key(|p| std::cmp::Reverse(p.len()));
+    out
 }
 
 /// One compiled self-duplication rule.
@@ -144,6 +231,8 @@ fn build() -> Result<Compiled, String> {
     let mut participial_rules: Vec<(usize, HashSet<String>, usize)> = Vec::new();
     let mut contrastive_rules: Vec<ContrastiveRule> = Vec::new();
     let mut duplication_rules: Vec<DuplicationRule> = Vec::new();
+    let mut denial_rules: Vec<DenialRule> = Vec::new();
+    let mut rationale_rules: Vec<RationaleRule> = Vec::new();
 
     for (idx, rule) in rules.iter().enumerate() {
         // Every text rule's `patterns` ride the shared regex pass; the data
@@ -200,6 +289,54 @@ fn build() -> Result<Compiled, String> {
                     shingle_words: rule.shingle_words,
                     min_run_words: rule.min_run_words,
                     max_reports: rule.max_reports,
+                });
+            }
+            Mechanism::CapabilityDenial => {
+                denial_rules.push(DenialRule {
+                    rule: idx,
+                    subjects: subject_set(&rule.subjects, &rule.determiners, &rule.tool_nouns),
+                    negative_subjects: subject_set(
+                        &rule.negative_subjects,
+                        &rule.negative_determiners,
+                        &rule.tool_nouns,
+                    ),
+                    pronouns: rule.subjects.iter().cloned().collect(),
+                    coordinators: rule.coordinators.iter().cloned().collect(),
+                    imperative_negations: rule
+                        .imperative_negations
+                        .iter()
+                        .map(|p| phrase_tokens(p))
+                        .collect(),
+                    finite_negations: rule
+                        .finite_negations
+                        .iter()
+                        .map(|p| phrase_tokens(p))
+                        .collect(),
+                    window: rule.negation_window,
+                    verb_window: rule.verb_window,
+                    capability_verbs: rule
+                        .capability_verbs_base
+                        .iter()
+                        .chain(&rule.capability_verbs_s)
+                        .chain(&rule.capability_verbs_ing)
+                        .cloned()
+                        .collect(),
+                    capability_finite: rule
+                        .capability_verbs_base
+                        .iter()
+                        .chain(&rule.capability_verbs_s)
+                        .cloned()
+                        .collect(),
+                    capability_third: rule.capability_verbs_s.iter().cloned().collect(),
+                    hedges: rule.hedges.iter().map(|p| phrase_tokens(p)).collect(),
+                    tool_nouns: rule.tool_nouns.iter().cloned().collect(),
+                });
+            }
+            Mechanism::RationaleLeak => {
+                rationale_rules.push(RationaleRule {
+                    rule: idx,
+                    markers: rule.markers.iter().map(|p| phrase_tokens(p)).collect(),
+                    tool_nouns: rule.tool_nouns.iter().cloned().collect(),
                 });
             }
         }
@@ -266,6 +403,8 @@ fn build() -> Result<Compiled, String> {
         participial_rules,
         contrastive_rules,
         duplication_rules,
+        denial_rules,
+        rationale_rules,
     })
 }
 
@@ -787,6 +926,520 @@ fn scan_contrastive(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     }
 }
 
+/// One lowercased word token with its byte span in the source. A token is a
+/// maximal run of alphanumerics and apostrophes, with the typographic
+/// apostrophe folded to ASCII so `doesn\u{2019}t` and `doesn't` are one token.
+struct Tok {
+    start: usize,
+    end: usize,
+    text: String,
+}
+
+fn tokens_in(src: &str, range: &Range<usize>) -> Vec<Tok> {
+    let mut out = Vec::new();
+    let mut open: Option<(usize, String)> = None;
+    for (i, c) in src[range.clone()].char_indices() {
+        let at = range.start + i;
+        let c = if c == '\u{2019}' { '\'' } else { c };
+        if c.is_alphanumeric() || c == '\'' {
+            match &mut open {
+                Some((_, text)) => text.push(c.to_ascii_lowercase()),
+                None => open = Some((at, c.to_ascii_lowercase().to_string())),
+            }
+        } else if let Some((start, text)) = open.take() {
+            out.push(Tok {
+                start,
+                end: at,
+                text,
+            });
+        }
+    }
+    if let Some((start, text)) = open.take() {
+        out.push(Tok {
+            start,
+            end: range.end,
+            text,
+        });
+    }
+    out
+}
+
+/// Match `phrase` against the tokens starting at `i`, returning the exclusive
+/// token index just past the match. A `*` element matches any one token.
+fn phrase_at(toks: &[Tok], i: usize, phrase: &[String]) -> Option<usize> {
+    if phrase.is_empty() || i + phrase.len() > toks.len() {
+        return None;
+    }
+    for (k, want) in phrase.iter().enumerate() {
+        if want != "*" && toks[i + k].text != *want {
+            return None;
+        }
+    }
+    Some(i + phrase.len())
+}
+
+/// The token index a clause's tests start from: one leading coordinator is
+/// skipped, so `and it does not ...` and `it does not ...` read alike.
+fn clause_head(toks: &[Tok], coordinators: &HashSet<String>) -> usize {
+    match toks.first() {
+        Some(t) if coordinators.contains(&t.text) => 1,
+        _ => 0,
+    }
+}
+
+/// The closed subject occupying the head of a clause.
+fn head_subject(toks: &[Tok], head: usize, subjects: &[Vec<String>]) -> Option<(String, usize)> {
+    subjects
+        .iter()
+        .find_map(|p| phrase_at(toks, head, p).map(|end| (p.join(" "), end)))
+}
+
+/// Whether a token is a base-form verb, by English suffix. `-s` marks the
+/// third person (`scores`), `-ing` and `-ed` mark participles; a word ending
+/// in `ss`, `us`, or `is` (`process`, `focus`, `axis`) is not inflected. The
+/// test runs only on the word a clause-initial negation governs, and every
+/// misreading resolves the same way the rule behaved before the test
+/// existed: `ping` and `feed` read as inflected, so their clause is not
+/// excluded, and it then fails the family tests for want of a subject.
+fn base_form(word: &str) -> bool {
+    if word.ends_with("ing") || word.ends_with("ed") {
+        return false;
+    }
+    if word.ends_with('s') {
+        return word.ends_with("ss") || word.ends_with("us") || word.ends_with("is");
+    }
+    true
+}
+
+/// Trim a byte range to its non-whitespace extent. `None` when nothing is
+/// left.
+fn trim_range(src: &str, range: Range<usize>) -> Option<Range<usize>> {
+    let slice = src.get(range.clone())?;
+    let lead = slice.len() - slice.trim_start().len();
+    let trail = slice.len() - slice.trim_end().len();
+    let out = (range.start + lead)..(range.end - trail);
+    (out.start < out.end).then_some(out)
+}
+
+/// Paragraph blocks: byte ranges of the text between blank lines. A blank
+/// line is the only block break, so an ordinary hard-wrapped paragraph stays
+/// one block and its sentences remain adjacent.
+fn blocks(src: &str) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    let mut pos = 0usize;
+    for line in src.split_inclusive('\n') {
+        let end = pos + line.len();
+        if line.trim().is_empty() {
+            if let Some(r) = trim_range(src, start..pos) {
+                out.push(r);
+            }
+            start = end;
+        }
+        pos = end;
+    }
+    if let Some(r) = trim_range(src, start..src.len()) {
+        out.push(r);
+    }
+    out
+}
+
+/// Sentence ranges inside a block. A sentence closes at `!`, `?`, a terminal
+/// `.` (`period_is_terminal`, so `U.S.` does not split one), or a line break,
+/// which keeps a heading or a list item from running into the text below it.
+fn sentences(src: &str, block: &Range<usize>) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    let mut start = block.start;
+    let mut i = block.start;
+    while i < block.end {
+        let Some(c) = src[i..].chars().next() else {
+            break;
+        };
+        let next = i + c.len_utf8();
+        let breaks = match c {
+            '\n' | '!' | '?' => true,
+            '.' => period_is_terminal(src, next),
+            _ => false,
+        };
+        if breaks {
+            if let Some(r) = trim_range(src, start..next) {
+                out.push(r);
+            }
+            start = next;
+        }
+        i = next;
+    }
+    if let Some(r) = trim_range(src, start..block.end) {
+        out.push(r);
+    }
+    out
+}
+
+/// Clause ranges inside a sentence. A comma or a semicolon divides the
+/// sentence and belongs to neither side.
+fn clauses(src: &str, sentence: &Range<usize>) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    let mut start = sentence.start;
+    for (i, c) in src[sentence.clone()].char_indices() {
+        if matches!(c, ',' | ';') {
+            let at = sentence.start + i;
+            if let Some(r) = trim_range(src, start..at) {
+                out.push(r);
+            }
+            start = at + c.len_utf8();
+        }
+    }
+    if let Some(r) = trim_range(src, start..sentence.end) {
+        out.push(r);
+    }
+    out
+}
+
+/// The negated self-capability clause, in the two spellings the rule
+/// accepts. Spelling A: a positive subject at the clause head, an explicit
+/// negation within the subject window, and a capability verb within the verb
+/// window after that negation, so intervening adverbs are free. Spelling B:
+/// a negative subject, which carries its own negation, and a capability verb
+/// within the subject window. Both spellings require the capability verb.
+/// Denying a function verb (`the check does not fire`) is an honest scope
+/// fact and stays out.
+fn denied_capability(toks: &[Tok], head: usize, dr: &DenialRule) -> Option<String> {
+    let verb_at = |from: usize, width: usize| {
+        toks[from.min(toks.len())..(from + width).min(toks.len())]
+            .iter()
+            .any(|t| dr.capability_verbs.contains(&t.text))
+    };
+    if let Some((subject, after)) = head_subject(toks, head, &dr.subjects) {
+        for start in after..(after + dr.window).min(toks.len()) {
+            let negated = dr
+                .imperative_negations
+                .iter()
+                .chain(&dr.finite_negations)
+                .filter_map(|n| phrase_at(toks, start, n))
+                .any(|end| verb_at(end, dr.verb_window));
+            if negated {
+                return Some(subject);
+            }
+        }
+    }
+    if let Some((subject, after)) = head_subject(toks, head, &dr.negative_subjects) {
+        if verb_at(after, dr.window) {
+            return Some(subject);
+        }
+    }
+    // Spelling C, the subjectless clause: the negation sits at the head with
+    // its subject elided from the clause before it. A finite-only negation
+    // takes a base or third-person capability verb. An imperative-capable
+    // negation takes only the third-person form, because a base form there is
+    // a command (`Never score voice.`) and an `-ing` form is a participial
+    // adjunct (`She listened, never judging anyone.`).
+    let elided = |negations: &[Vec<String>], forms: &HashSet<String>| {
+        negations
+            .iter()
+            .filter_map(|n| phrase_at(toks, head, n))
+            .any(|after| {
+                toks[after.min(toks.len())..(after + dr.verb_window).min(toks.len())]
+                    .iter()
+                    .any(|t| forms.contains(&t.text))
+            })
+    };
+    if elided(&dr.finite_negations, &dr.capability_finite)
+        || elided(&dr.imperative_negations, &dr.capability_third)
+    {
+        return Some(String::new());
+    }
+    None
+}
+
+/// The imperative test, run on one clause before any family test. The clause
+/// is a command when its head token opens a negation phrase and the word
+/// that negation governs is a base-form verb (`Do not obey`). A clause-head
+/// negation governing an inflected verb is the middle of a denial stack with
+/// its subject elided (`never scores voice`) and stays in.
+fn imperative_clause(toks: &[Tok], head: usize, dr: &DenialRule) -> bool {
+    let Some(after) = dr
+        .imperative_negations
+        .iter()
+        .find_map(|n| phrase_at(toks, head, n))
+    else {
+        return false;
+    };
+    toks.get(after).map(|t| base_form(&t.text)).unwrap_or(true)
+}
+
+/// Cut one comma clause at every interior coordinator. The coordinator opens
+/// the segment after it, where the leading-coordinator skip already reads it,
+/// so `It does not detect authorship and never scores voice.` becomes two
+/// segments and the stack arm can see them both. This is the same
+/// segmentation pass carried one level down, not a second splitter. Cutting
+/// everywhere is safe because qualification is self-gating: a bare
+/// coordinated tail carries neither its own subject nor a head negation, so
+/// `... that a person or a model wrote anything` still yields exactly one
+/// qualifying segment.
+fn split_at_coordinators(
+    src: &str,
+    clause: &Range<usize>,
+    toks: &[Tok],
+    dr: &DenialRule,
+) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    let mut start = clause.start;
+    // Skip index 0: a coordinator already at the head belongs to this clause.
+    for t in toks.iter().skip(1) {
+        if dr.coordinators.contains(&t.text) {
+            if let Some(r) = trim_range(src, start..t.start) {
+                out.push(r);
+            }
+            start = t.start;
+        }
+    }
+    if let Some(r) = trim_range(src, start..clause.end) {
+        out.push(r);
+    }
+    out
+}
+
+/// One classified segment. `qualifies` marks a denial or a hedge;
+/// `affirmative` marks a segment that can serve as the partner arm, meaning
+/// it names a closed-set subject and denies nothing. `referent` is what a
+/// qualifying segment claims to be about, absent when its subject is elided.
+/// `report` is the span the finding cites: the segment itself for the three
+/// subject-and-verb spellings, which is the unit a writer edits, and the
+/// whole comma clause for an evidential hedge, whose phrases govern an open
+/// complement.
+struct ClauseFacts {
+    report: Range<usize>,
+    qualifies: bool,
+    affirmative: bool,
+    subject: Option<String>,
+    referent: Option<String>,
+    /// Whether this segment can carry the adjacency arm. A denial names its
+    /// own subject or elides it from the clause before, so it can. An
+    /// evidential hedge over a subject outside the closed set is about
+    /// something else, so coreference cannot be tested and the segment
+    /// counts toward the stack arm alone.
+    arm_b_eligible: bool,
+}
+
+/// The span a finding cites. It opens where the analysis opened, at the
+/// first token past the leading-coordinator skip, and closes on the last
+/// byte of clause content. Trailing whitespace and delimiters are left out:
+/// a mid-sentence comma or semicolon, and a sentence-final `.`, `!`, or `?`.
+/// So a span never opens on a coordinator and never closes on sentence
+/// punctuation, and the cited text is the writer's own words.
+fn reported_span(src: &str, range: &Range<usize>, dr: &DenialRule) -> Range<usize> {
+    let toks = tokens_in(src, range);
+    let head = clause_head(&toks, &dr.coordinators);
+    let start = toks.get(head).map_or(range.start, |t| t.start);
+    let mut end = range.end.max(start);
+    while end > start {
+        let Some(c) = src[..end].chars().next_back() else {
+            break;
+        };
+        if c.is_whitespace() || matches!(c, '.' | '!' | '?' | ',' | ';') {
+            end -= c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    start..end
+}
+
+/// Run every segment-level test once. The imperative exclusion comes first,
+/// so a command neither qualifies nor stands in as an affirmative partner.
+fn classify_clause(
+    src: &str,
+    segment: Range<usize>,
+    clause: &Range<usize>,
+    dr: &DenialRule,
+) -> ClauseFacts {
+    let toks = tokens_in(src, &segment);
+    let head = clause_head(&toks, &dr.coordinators);
+    let subject = head_subject(&toks, head, &dr.subjects).map(|(s, _)| s);
+    if imperative_clause(&toks, head, dr) {
+        return ClauseFacts {
+            report: reported_span(src, &segment, dr),
+            qualifies: false,
+            affirmative: false,
+            subject,
+            referent: None,
+            arm_b_eligible: false,
+        };
+    }
+    let denied = denied_capability(&toks, head, dr);
+    // An open hedge form (`no <one or two words> is evidence`) carries its
+    // head noun in the last wildcard slot. That noun is what the clause is
+    // about, so it takes the closed-set test in place of a head subject.
+    let mut hedged = false;
+    let mut hedge_head = None;
+    for i in 0..toks.len() {
+        for h in &dr.hedges {
+            if phrase_at(&toks, i, h).is_some() {
+                hedged = true;
+                if let Some(slot) = h.iter().rposition(|p| p == "*") {
+                    hedge_head = Some(toks[i + slot].text.clone());
+                }
+            }
+        }
+    }
+    let hedge_head = hedge_head.filter(|n| dr.tool_nouns.contains(n));
+    let family_one = denied.is_some();
+    // An empty string is the subjectless spelling: the segment qualifies and
+    // names no referent of its own.
+    let referent = denied.filter(|s| !s.is_empty());
+    // A hedge borrows the adjacency arm only when it names a closed-set
+    // thing, at its head subject or as the head noun of an open form. That
+    // is what makes coreference testable.
+    let arm_b_eligible = family_one || subject.is_some() || hedge_head.is_some();
+    ClauseFacts {
+        report: reported_span(src, if family_one { &segment } else { clause }, dr),
+        qualifies: family_one || hedged,
+        affirmative: !(family_one || hedged) && subject.is_some(),
+        referent: if family_one {
+            referent
+        } else {
+            subject.clone().or(hedge_head)
+        },
+        subject,
+        arm_b_eligible,
+    }
+}
+
+/// Pass 8: the capability-denial scan (SD-Q007). Within one block, a
+/// segment qualifies when it denies a capability of the closed subject (see
+/// `denied_capability` for the three spellings) or carries an evidential
+/// hedge phrase. The imperative test runs per segment first, so one command
+/// at the head of a sentence cannot carry a denial stack behind it. Arm A is
+/// the stack: two qualifying segments anywhere in the block. Arm B is one
+/// qualifying segment beside an affirmative partner, searched in the ruled
+/// order. One finding per qualifying segment, never one per partner, and
+/// each finding names the arm that fired.
+fn scan_denial(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
+    for dr in &cp.denial_rules {
+        for block in blocks(src) {
+            let sentences = sentences(src, &block);
+            // One segmentation pass serves every test. Each sentence becomes
+            // its final segment list, and each segment is classified once.
+            let table: Vec<Vec<ClauseFacts>> = sentences
+                .iter()
+                .map(|sentence| {
+                    let mut facts = Vec::new();
+                    for clause in clauses(src, sentence) {
+                        let toks = tokens_in(src, &clause);
+                        for segment in split_at_coordinators(src, &clause, &toks, dr) {
+                            facts.push(classify_clause(src, segment, &clause, dr));
+                        }
+                    }
+                    facts
+                })
+                .collect();
+
+            // One referent when the two subjects match, when either is a bare
+            // closed-set pronoun (it refers back to its neighbour), or when
+            // both name the same tool noun, counting a singular and its
+            // plural as one word. Two different tool nouns are two things, so
+            // they do not corefer. A segment whose own subject is elided
+            // names no referent and takes any partner.
+            let lemma = |s: &str| {
+                s.split(' ').rev().find_map(|t| {
+                    dr.tool_nouns.contains(t).then(|| {
+                        t.strip_suffix('s')
+                            .filter(|base| dr.tool_nouns.contains(*base))
+                            .unwrap_or(t)
+                            .to_string()
+                    })
+                })
+            };
+            let coreferent = |a: &Option<String>, b: &str| match a {
+                None => true,
+                Some(a) => {
+                    a == b
+                        || dr.pronouns.contains(a)
+                        || dr.pronouns.contains(b)
+                        || lemma(a).zip(lemma(b)).is_some_and(|(x, y)| x == y)
+                }
+            };
+            // The affirmative partner search, in the ruled order, stopping at
+            // the first match: the qualifying segment's own sentence at any
+            // distance, then the sentence before, then the sentence after.
+            let partner_in = |si: usize, skip: Option<usize>, referent: &Option<String>| {
+                table.get(si).is_some_and(|facts| {
+                    facts.iter().enumerate().any(|(ci, f)| {
+                        Some(ci) != skip
+                            && f.affirmative
+                            && f.subject.as_ref().is_some_and(|s| coreferent(referent, s))
+                    })
+                })
+            };
+            let has_partner = |si: usize, ci: usize, referent: &Option<String>| {
+                partner_in(si, Some(ci), referent)
+                    || si
+                        .checked_sub(1)
+                        .is_some_and(|prev| partner_in(prev, None, referent))
+                    || partner_in(si + 1, None, referent)
+            };
+
+            let qualifying: Vec<(usize, usize)> = table
+                .iter()
+                .enumerate()
+                .flat_map(|(si, facts)| {
+                    facts
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, f)| f.qualifies)
+                        .map(move |(ci, _)| (si, ci))
+                })
+                .collect();
+            // The arm is readable from the findings themselves: several in
+            // one block is the stack, one is the adjacency form. Nothing is
+            // written into the report to say so.
+            let fires = qualifying.len() >= 2
+                || qualifying.first().is_some_and(|&(si, ci)| {
+                    table[si][ci].arm_b_eligible && has_partner(si, ci, &table[si][ci].referent)
+                });
+            if !fires {
+                continue;
+            }
+            for (si, ci) in qualifying {
+                hits.push(Hit {
+                    rule: dr.rule,
+                    span: table[si][ci].report.clone(),
+                });
+            }
+        }
+    }
+}
+
+/// Pass 9: the rationale-leak scan (SD-Q008). A design-economics or
+/// reception-instruction marker fires only when its sentence also names a
+/// tool noun, at any position. That anchor is the whole precision budget:
+/// it keeps ordinary adverbs (`she deliberately ignored him`, `that was
+/// deliberately vague`) silent. One finding per marker occurrence, spanning
+/// the marker.
+fn scan_rationale(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
+    for rr in &cp.rationale_rules {
+        for block in blocks(src) {
+            for sentence in sentences(src, &block) {
+                let toks = tokens_in(src, &sentence);
+                let anchored = toks.iter().any(|t| rr.tool_nouns.contains(&t.text));
+                if !anchored {
+                    continue;
+                }
+                for i in 0..toks.len() {
+                    for marker in &rr.markers {
+                        if let Some(end) = phrase_at(&toks, i, marker) {
+                            hits.push(Hit {
+                                rule: rr.rule,
+                                span: toks[i].start..toks[end - 1].end,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Pass 2: the overlapping adapter over regex-automata's DFAs. The forward
 /// DFA yields (pattern, end) pairs; the reverse DFA anchored to the pattern
 /// and bounded by the pattern's max width recovers the start.
@@ -978,6 +1631,8 @@ pub fn scan_all(cp: &Compiled, src: &str) -> Vec<Hit> {
     scan_participial(cp, src, &mut hits);
     scan_contrastive(cp, src, &mut hits);
     scan_duplication(cp, src, &mut hits);
+    scan_denial(cp, src, &mut hits);
+    scan_rationale(cp, src, &mut hits);
     resolve_overlaps(&mut hits);
     hits
 }
@@ -1022,6 +1677,78 @@ mod tests {
         assert_eq!(cp.participial_rules.len(), 1);
         assert_eq!(cp.contrastive_rules.len(), 1);
         assert_eq!(cp.duplication_rules.len(), 1);
+        assert_eq!(cp.denial_rules.len(), 1);
+        assert_eq!(cp.rationale_rules.len(), 1);
+    }
+
+    #[test]
+    fn phrase_tokens_split_a_hyphenated_marker_like_the_source_does() {
+        assert_eq!(
+            phrase_tokens("the trade-off is"),
+            ["the", "trade", "off", "is"]
+        );
+        assert_eq!(
+            phrase_tokens("no * is evidence"),
+            ["no", "*", "is", "evidence"]
+        );
+        let src = "It carries the trade-off is nowhere.";
+        let toks = tokens_in(src, &(0..src.len()));
+        let words: Vec<&str> = toks.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(
+            words,
+            ["it", "carries", "the", "trade", "off", "is", "nowhere"]
+        );
+    }
+
+    #[test]
+    fn sentences_split_on_line_breaks_and_real_terminals_only() {
+        let src = "The U.S. team shipped it. Next line\nA heading";
+        let block = blocks(src);
+        assert_eq!(block.len(), 1);
+        let s: Vec<&str> = sentences(src, &block[0])
+            .into_iter()
+            .map(|r| &src[r])
+            .collect();
+        assert_eq!(s, ["The U.S. team shipped it.", "Next line", "A heading"]);
+    }
+
+    #[test]
+    fn base_form_reads_english_verb_suffixes() {
+        for base in [
+            "obey", "author", "sign", "judge", "process", "focus", "discuss",
+        ] {
+            assert!(base_form(base), "{base}");
+        }
+        for inflected in ["scores", "detects", "judging", "rated"] {
+            assert!(!base_form(inflected), "{inflected}");
+        }
+    }
+
+    #[test]
+    fn clauses_divide_on_commas_and_semicolons() {
+        let src = "It reads text; it does not detect authorship, and no rule scores voice.";
+        let block = blocks(src);
+        let sent = sentences(src, &block[0]);
+        assert_eq!(sent.len(), 1);
+        let c: Vec<&str> = clauses(src, &sent[0])
+            .into_iter()
+            .map(|r| &src[r])
+            .collect();
+        assert_eq!(
+            c,
+            [
+                "It reads text",
+                "it does not detect authorship",
+                "and no rule scores voice."
+            ]
+        );
+    }
+
+    #[test]
+    fn blank_lines_separate_blocks() {
+        let src = "One.\n\nTwo.\n";
+        let b: Vec<&str> = blocks(src).into_iter().map(|r| &src[r]).collect();
+        assert_eq!(b, ["One.", "Two."]);
     }
 
     #[test]

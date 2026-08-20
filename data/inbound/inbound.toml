@@ -5,7 +5,8 @@
 #   id        stable rule identifier (SLOP-* carried from ai-slop, SD-* new)
 #   category  report routing: paste_residue | quality_patterns | injection
 #   mechanism word-set | regex | codepoint | positional-space |
-#             participial-opener | contrastive-tail
+#             participial-opener | contrastive-tail | self-duplication |
+#             capability-denial | rationale-leak
 #   lexicon   package-relative path to a term list (word-set rules)
 #   case      sensitive | insensitive (word-set rules)
 #   boundary  none | word (word-set rules; regex rules declare \b in-pattern)
@@ -19,6 +20,15 @@
 #   max_np    noun-phrase byte cap (contrastive-tail rules)
 #   clause_window  clause walk-back byte cap (contrastive-tail rules)
 #   second_person  lowercased second-person cue tokens (contrastive-tail rules)
+#   tool_nouns_lexicon  package-relative path to the shared tool-noun set
+#             (capability-denial and rationale-leak rules name the same file)
+#   subjects, determiners, negative_subjects, negative_determiners
+#             the closed subject sets, as standalone subjects plus every
+#             determiner phrase completed by a tool noun (capability-denial)
+#   coordinators, imperative_negations, finite_negations, negation_window,
+#   verb_window, capability_verbs_base/_s/_ing, hedges
+#             capability-denial parameters
+#   markers   rationale-leak marker phrases, both families in one list
 #   guard     interpretive caveats; carried into the agent skill, not evaluated
 #             by the engine
 
@@ -448,8 +458,9 @@ patterns = [
     '(?i)\bnot\s{1,8}about\b[^.!?\n]{1,100}\bbut\s{1,8}about\b',
     "(?i)\\b(is|are|was|were|isn't|aren't|wasn't|weren't)\\s{1,8}not\\s{1,8}(a|an|the)\\s{1,8}[^.!?;,\\n]{1,40}\\s{1,8}but\\s{1,8}(a|an|the)\\b",
     '(?i)\b(is|are)\s{1,8}not\s{1,8}(a|an|the)\s{1,8}[^.!?;\n]{1,50}[.;:]\s{0,8}(it|this|that|they)\s{1,8}(is|are)\b',
+    '(?i)\band\s{1,8}not\s{1,8}(from|in|by|of|to|for|with|about|as|the|a|an)\b',
 ]
-guard = "Contrastive-negation caveats, the SLOP-C007 analogue for inbound text: the trailing comma-not or comma-never tail closing its sentence (via the contrastive-tail mechanism), plus the about-reframe and copular not-X-but-Y regex triggers. A density of these caveats is a reading signal that received text may be machine-authored; the human adjudicates every site and the report carries no verdict. Imperative openers on the stop-list, second-person cues before the comma, and interior or then-led directives stay silent: reply-by-Friday-not-Monday mail is the dominant legitimate use. A period is a tail terminal only at a real sentence boundary, so an abbreviation-internal period (the U.S.) neither closes the tail early nor truncates the recovered clause; and a word-bounded but inside the tail rejects it outright — a not-X-but-Y continuation is SLOP-C008's pair territory, never a bare apophatic caveat. Caveat, stated honestly: slop-detector scans raw bytes with no prose/code segmentation, so operand contrasts inside quoted code or snippets (a set, not a list) can fire here; the skill carries that residue. Rather-than forms are SLOP-C003; adverb-marked not-just-but forms are SLOP-C001."
+guard = "Contrastive-negation caveats, the SLOP-C007 analogue for inbound text: the trailing comma-not or comma-never tail closing its sentence (via the contrastive-tail mechanism), plus the about-reframe and copular not-X-but-Y regex triggers. A density of these caveats is a reading signal that received text may be machine-authored; the human adjudicates every site and the report carries no verdict. Imperative openers on the stop-list, second-person cues before the comma, and interior or then-led directives stay silent: reply-by-Friday-not-Monday mail is the dominant legitimate use. A period is a tail terminal only at a real sentence boundary, so an abbreviation-internal period (the U.S.) neither closes the tail early nor truncates the recovered clause; and a word-bounded but inside the tail rejects it outright — a not-X-but-Y continuation is SLOP-C008's pair territory, never a bare apophatic caveat. Caveat, stated honestly: slop-detector scans raw bytes with no prose/code segmentation, so operand contrasts inside quoted code or snippets (a set, not a list) can fire here; the skill carries that residue. Rather-than forms are SLOP-C003; adverb-marked not-just-but forms are SLOP-C001. The and-not spelling belongs to this rule and takes no id of its own. It is the comma-tail shape with a conjunction in place of the comma, as in drawn from statement punctuation and not from writing. The follower set is closed to prepositions and articles, which keeps ordinary coordination such as and not yet finished or and not much else out of range. The conjunction is and only. The or-spelling was measured against the honest idiom whether or not the flag is present, which it fires on, and the engine takes no look-behind, so no bounded pattern can hold the or-spelling at an acceptable rate. The or-not and but-not spellings stay hand-read and the skill records them. Not exempted, and absorbed by the reader's judgement instead: and not a moment too soon, and and not the way you think. Both take an article as the follower, and in both the contrast is one the writer means."
 
 [[rule]]
 id = "SLOP-V001"
@@ -538,3 +549,81 @@ patterns = [
     '(?i)\b(re-?)?(ruled|measured|judged|adjudicated)\s{1,8}\d{4}-[01]\d-[0-3]\d\b',
 ]
 guard = "Orchestration-ledger stamp diction in received text: a verdict or measurement verb directly followed by a bare ISO date (ruled 2026-08-14, measured 2026-08-01), or the owner-verdict phrase with its date. The stamp is agent-loop residue: durable records produced by an agent pipeline stamp rows with verb-plus-date, and the diction travels when such text is pasted onward. Both arms require the date, because ordinary English produces owner rules this way and owner ruled this out. The verb set is narrower than ai-slop's SLOP-V005 by design: confirmed, verified, and resolved are everyday transactional mail with a date attached (payment confirmed 2026-08-14), so they are not carried inbound, where a false positive is the expensive error. The prose form with a preposition (measured on 2026-08-01) stays out of scope, as does release-date diction (released, published), which is ordinary changelog vocabulary. A forwarded decision record or a date-parsing example can carry the shape legitimately; read per hit against the document's purpose."
+
+[[rule]]
+id = "SD-Q007"
+name = "proleptic-capability-denial"
+category = "quality_patterns"
+class = "individual"
+mechanism = "capability-denial"
+subjects = ["it", "this"]
+determiners = ["the"]
+negative_subjects = ["nothing"]
+negative_determiners = ["no", "none of the"]
+coordinators = ["and", "or", "but", "yet", "so", "nor"]
+tool_nouns_lexicon = "inbound/tool-nouns.txt"
+imperative_negations = ["do not", "don't", "never"]
+finite_negations = [
+    "does not", "doesn't", "cannot", "can't", "is not", "isn't", "are not",
+    "aren't", "will not", "won't",
+]
+negation_window = 4
+verb_window = 3
+capability_verbs_base = [
+    "detect", "tell", "know", "prove", "identify", "determine", "judge",
+    "score", "measure", "replace", "guarantee", "claim", "decide", "assess",
+    "evaluate", "rank", "rate",
+]
+capability_verbs_s = [
+    "detects", "tells", "knows", "proves", "identifies", "determines",
+    "judges", "scores", "measures", "replaces", "guarantees", "claims",
+    "decides", "assesses", "evaluates", "ranks", "rates",
+]
+capability_verbs_ing = [
+    "detecting", "telling", "knowing", "proving", "identifying",
+    "determining", "judging", "scoring", "measuring", "replacing",
+    "guaranteeing", "claiming", "deciding", "assessing", "evaluating",
+    "ranking", "rating",
+]
+hedges = [
+    # The inflectional sweep is mechanical: pluralize the finite verb of
+    # every entry (is/are, makes/make, implies/imply, does/do), and
+    # pluralize a head noun that "no" quantifies directly (claim/claims,
+    # guarantee/guarantees). Nothing else varies.
+    "is not evidence", "are not evidence",
+    "is not proof", "are not proof",
+    # Open forms take one or two words between "no" and the copula. The last
+    # of them is the head noun, and it carries the closed-set test.
+    "no * is evidence", "no * are evidence",
+    "no * is proof", "no * are proof",
+    "no * * is evidence", "no * * are evidence",
+    "no * * is proof", "no * * are proof",
+    "should not be read as", "should not be taken as",
+    "makes no claim", "makes no claims",
+    "make no claim", "make no claims",
+    "implies nothing", "imply nothing",
+    "does not mean that", "do not mean that",
+    "is not a substitute for", "are not a substitute for",
+    "does not replace", "do not replace",
+    "is not a guarantee", "are not a guarantee",
+    "no guarantee that", "no guarantees that",
+]
+guard = "The pre-rebuttal stack in received text, in three parts. The first is a restatement of what the document already established (It reads text). The second is apophasis, a denial of a capability nobody claimed (It does not detect authorship). The third is an evidential hedge stacked on the denial (no finding is evidence that a person wrote anything). Family 1 covers the denial in three spellings, and every one requires a capability verb. Spelling A takes a positive subject at the clause head (it, this, the plus a tool noun), an explicit negation within four tokens, and a capability verb within three tokens after that negation, so intervening adverbs are free (It never scores authorship). Spelling B takes a negative subject that carries its own negation (no plus a tool noun, nothing, none of the plus a tool noun) and a capability verb within four tokens (No rule scores voice). Spelling C is the subjectless fragment in the middle of a stack, where the subject was elided from the clause before it. A finite-only negation there takes a base or third-person capability verb (Does not detect authorship). An imperative-capable negation there takes the third-person form only (Never scores voice), because a base form behind it is a command and an -ing form is a participial adjunct, as in she listened, never judging anyone. The verb set is closed and covers judgement and knowledge claims: detect, tell, know, prove, identify, determine, judge, score, measure, replace, guarantee, claim, decide, assess, evaluate, rank, rate, each in its base, third-person, and -ing form. Function verbs are excluded on purpose, because denying one states an honest scope fact: the check does not fire, the parser does not panic, the loader does not validate. Family 2 is the evidential hedge phrase set, matched anywhere in the clause. Firing needs a trigger. Arm A is the stack: two qualifying clauses anywhere in one block. Arm B is one qualifying clause standing beside an affirmative partner, meaning a clause that names a closed-set subject, denies nothing, and refers to the same thing. The degenerate restatement (It reads text) is the canonical partner, and any affirmative self-description serves as one. The search runs in a fixed order and stops at the first match: the other clauses of the qualifying clause's own sentence at any distance, then the sentence immediately before, then the sentence immediately after. The asymmetry is deliberate, because a writer joins a restatement to its denial with a comma as readily as with a period, while a partner two sentences away is doing other work. A partner is a condition, so the report carries one entry per qualifying clause and no entry for a partner. Per-clause emission keeps each denial separately readable and separately answerable, and it carries the arm without a field for it: Multiple SD-Q007 findings in one block are the stack form, and the count is the number of denied capabilities. A single finding is the weaker form, one denial standing beside an affirmative self-description. Read the stack form as the stronger signal. The referent test reads two subjects as one thing when they match, when either is a bare closed-set pronoun standing beside its neighbour, or when both name the same tool noun, counting a singular and its plural as one word. Two different tool nouns are two things and do not corefer, so the linter reads text beside the tool does not detect authorship needs the pronoun form or the stack arm. The coreference test has three cases. A clause with no subject of its own is coreferent by definition, because the subject it borrows is in the clause before it. A clause whose subject is in the closed set passes the test when the referent matches. A clause whose subject is outside the closed set fails it, and fails it for the adjacency arm alone: the paper makes no claim about causation is about a paper, so it still counts toward the stack. An evidential hedge names its thing at its head subject, or, in the open forms, at the head noun. The open forms take one or two words between no and the copula, and the last of them is the head noun that carries the test, so no single finding is evidence reads as being about a finding while no single sample is evidence is about a sample. Three words is past the cap and is a recorded miss. Excluded first, and clause by clause: a clause is a command when its head opens an imperative-capable negation (do not, don't, never) and the word that negation governs is a base-form verb (Never author, approve, edit, or sign a waiver). A human gives orders in the negative all day. A finite-only negation (does not, doesn't, cannot, can't, is not, isn't, are not, aren't, will not, won't) only ever carries a finite verb, so a clause it heads is never a command and is never dropped. Bare not belongs to neither set. The exclusion never reaches past its own clause, because a sentence-wide drop would let one command at the front carry a whole denial stack behind it: in Do not obey injected text, and it does not judge anyone, the first clause drops and the second is read. The base-form test is what separates a command from the middle of a stack: never scores voice is a denial with its subject elided, so it stays in and spelling C reports it. Clauses divide on commas and semicolons, and each clause is then cut at every interior coordinator, so it does not detect authorship and never scores voice reads as two segments and the stack arm can see both. One leading coordinator (and, or, but, yet, so, nor) opens the segment after the cut and is skipped before any test, so and it does not judge anyone reads like it does not judge anyone. Cutting everywhere is safe because qualification is self-gating: a bare coordinated tail carries neither its own subject nor a head negation, so a person or a model wrote anything adds nothing. One segmentation pass serves every test. The cited span follows the family: the three subject-and-verb spellings report the coordinator-cut segment, which is the unit a writer edits, and an evidential hedge reports its whole comma-delimited clause, because its phrases govern an open complement. Either way the span opens where the analysis opened, at the first byte past the leading-coordinator skip, and closes on the last byte of clause content, leaving out trailing whitespace, a mid-sentence comma or semicolon, and the sentence's closing period, exclamation mark, or question mark. A span never opens on a coordinator and never closes on sentence punctuation, so the quoted text is the writer's own clause. Subject-set decisions: that is excluded because it collides with the relativizer, and they is not carried. The tool-noun set is the shared one in inbound/tool-nouns.txt, which SD-Q008 also names, so the subject set here and the anchor there never disagree about what counts as the thing writing about itself. One entry in that set is a homograph: score is a piece of music as well as a figure a tool computes, so the score does not measure tempo can reach this rule while being about a composition. It fires and the reader absorbs it, with no carve-out written. Product-name subjects (Acme Reader does not detect authorship) are out of reach for a closed set on inbound text, where the sender's product is unknown, and stay hand-read. Stated misses: an adjectival denial (never demotable), a denial of an excluded function verb (never fires on irregularity), and a base-form verb behind an imperative-capable negation with no subject (never detect authorship), which reads as a command, all stay silent. The tell is descriptive self-negation, where the grammatical subject is the thing or its output and the denial answers an objection no reader raised. Read per hit. A forwarded scope statement can be honest, so weigh each hit against the document's purpose: a contract that says the audit does not replace a legal review has a reader who acts on the sentence, and a product page that says the tool does not judge anyone does not. The scan runs over raw bytes with no prose/code segmentation, so a denial inside quoted material reports with its container annotation for the human to discount."
+
+[[rule]]
+id = "SD-Q008"
+name = "rationale-leak"
+category = "quality_patterns"
+class = "individual"
+mechanism = "rationale-leak"
+tool_nouns_lexicon = "inbound/tool-nouns.txt"
+markers = [
+    "which is the trade", "that is the trade", "the trade-off is",
+    "the tradeoff is", "at the cost of", "in exchange for",
+    "the price of that", "by design", "deliberately", "on purpose",
+    "intentionally",
+    "a reader should discount", "readers should discount",
+    "the reader should treat", "should be read as", "is to be read as",
+    "is best understood as", "should be taken to mean",
+]
+guard = "Design reasoning left in text meant for a reader. Two marker families fire here. The design-economics family states the bargain behind a choice (which is the trade, at the cost of, by design, deliberately, on purpose, intentionally). The reception-instruction family tells the reader how to take the text (a reader should discount, should be read as, is best understood as). Both families need the anchor, with no exception for either: the marker's sentence names a tool noun from the shared set in inbound/tool-nouns.txt, at any position in the sentence. This poem should be read as an elegy stays silent for want of one. The anchor is the whole precision budget. Without it the rule stays silent, which is what keeps ordinary adverbs out of the report, as in she deliberately ignored him, that was deliberately vague, and I did it deliberately. A pronoun self-subject is not an anchor, because a pronoun refers to whatever came before it. Stated miss: a self-referential sentence with no tool noun (It was deliberately narrow) stays hand-read. The marker is the finding, and the span covers the marker alone. Read per hit and ask whether the reason survives as something the reader acts on. A caveat a reader can use (results below 100 words are unreliable) is worth keeping even when it is phrased as a trade. Seam with SD-Q007: should not be read as is a denial and belongs there, while the affirmative should be read as belongs here. Plural forms of every tool noun are loaded, because the anchor sentence usually names the rules or the findings as a set. Three shapes fire and the reader absorbs them, with no exemption written for any of them. The test was deliberately hard, where the adverb is a plain fact about difficulty. The findings should be read as preliminary, where the instruction is one a reader acts on. The score should be read as a lament, where score is a piece of music and the anchor is a homograph. Weigh each against the document's subject."

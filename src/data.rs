@@ -121,6 +121,10 @@ const LEXICONS: &[(&str, &str)] = &[
         "words/agent-loop.txt",
         include_str!("../data/words/agent-loop.txt"),
     ),
+    (
+        "inbound/tool-nouns.txt",
+        include_str!("../data/inbound/tool-nouns.txt"),
+    ),
 ];
 
 /// Report routing for a rule's findings.
@@ -143,6 +147,8 @@ pub enum Mechanism {
     ParticipialOpener,
     ContrastiveTail,
     SelfDuplication,
+    CapabilityDenial,
+    RationaleLeak,
 }
 
 /// Interpretive class annotation for quality rules. Not emitted
@@ -233,6 +239,43 @@ pub struct Rule {
     pub min_run_words: usize,
     /// Self-duplication per-document emission cap, longest runs first.
     pub max_reports: usize,
+    /// Closed positive subjects, lowercased (capability-denial).
+    pub subjects: Vec<String>,
+    /// Determiners that open a positive noun-phrase subject, lowercased.
+    /// Crossed with `tool_nouns` at compile time (capability-denial).
+    pub determiners: Vec<String>,
+    /// Closed negative subjects that carry their own negation, lowercased
+    pub negative_subjects: Vec<String>,
+    /// Determiners that open a negative noun-phrase subject, lowercased.
+    /// Crossed with `tool_nouns` at compile time (capability-denial).
+    pub negative_determiners: Vec<String>,
+    /// The shared tool-noun set, lowercased. One file defines it and both
+    /// clause-shape rules name that file.
+    pub tool_nouns: Vec<String>,
+    /// Coordinators skipped at a clause head before any test
+    pub coordinators: Vec<String>,
+    /// Negation phrases that can open a command, lowercased
+    pub imperative_negations: Vec<String>,
+    /// Negation phrases that only ever carry a finite verb, so a clause they
+    /// head is never a command (capability-denial).
+    pub finite_negations: Vec<String>,
+    /// Subject-scope window in tokens: the positive subject's distance to
+    /// its negation, and the negative subject's distance to its capability
+    /// verb (capability-denial).
+    pub negation_window: usize,
+    /// Token distance after a negation inside which the capability verb must
+    /// appear (capability-denial).
+    pub verb_window: usize,
+    /// Closed capability-verb set, split by form so the subjectless spelling
+    /// can require an inflected verb (capability-denial).
+    pub capability_verbs_base: Vec<String>,
+    pub capability_verbs_s: Vec<String>,
+    pub capability_verbs_ing: Vec<String>,
+    /// Evidential hedge phrases (capability-denial). A `*` stands for any
+    /// one word token.
+    pub hedges: Vec<String>,
+    /// Rationale-leak marker phrases, both families flattened.
+    pub markers: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -274,8 +317,39 @@ struct RuleSpec {
     shingle_words: Option<usize>,
     min_run_words: Option<usize>,
     max_reports: Option<usize>,
+    subjects: Option<Vec<String>>,
+    determiners: Option<Vec<String>>,
+    negative_subjects: Option<Vec<String>>,
+    negative_determiners: Option<Vec<String>>,
+    coordinators: Option<Vec<String>>,
+    tool_nouns_lexicon: Option<String>,
+    imperative_negations: Option<Vec<String>>,
+    finite_negations: Option<Vec<String>>,
+    negation_window: Option<usize>,
+    verb_window: Option<usize>,
+    capability_verbs_base: Option<Vec<String>>,
+    capability_verbs_s: Option<Vec<String>>,
+    capability_verbs_ing: Option<Vec<String>>,
+    hedges: Option<Vec<String>>,
+    markers: Option<Vec<String>>,
     #[allow(dead_code)]
     guard: String,
+}
+
+/// Lowercase a term list, rejecting an empty list under a mechanism that
+/// requires it.
+fn word_list(id: &str, field: &str, list: Option<Vec<String>>) -> Result<Vec<String>, String> {
+    let terms: Vec<String> = list
+        .unwrap_or_default()
+        .iter()
+        .map(|t| t.to_lowercase())
+        .collect();
+    if terms.is_empty() {
+        return Err(format!(
+            "rule {id}: {field} is required and must be non-empty"
+        ));
+    }
+    Ok(terms)
 }
 
 fn lexicon(path: &str) -> Result<Vec<String>, String> {
@@ -413,6 +487,84 @@ pub fn load() -> Result<Vec<Rule>, String> {
         if spec.exemptions.is_some() && spec.mechanism != Mechanism::WordSet {
             return Err(format!("rule {id}: exemptions need word-set"));
         }
+        // The two clause-shape mechanisms. They share the tool-noun set and
+        // nothing else: capability-denial builds subjects from it, and
+        // rationale-leak anchors on it wherever it appears in the sentence.
+        // A parameter belonging to the other mechanism is a data error.
+        let denial = spec.mechanism == Mechanism::CapabilityDenial;
+        let rationale = spec.mechanism == Mechanism::RationaleLeak;
+        if spec.tool_nouns_lexicon.is_some() && !(denial || rationale) {
+            return Err(format!(
+                "rule {id}: tool_nouns_lexicon needs capability-denial or rationale-leak"
+            ));
+        }
+        if (spec.subjects.is_some()
+            || spec.determiners.is_some()
+            || spec.negative_subjects.is_some()
+            || spec.negative_determiners.is_some()
+            || spec.coordinators.is_some()
+            || spec.imperative_negations.is_some()
+            || spec.finite_negations.is_some()
+            || spec.negation_window.is_some()
+            || spec.verb_window.is_some()
+            || spec.capability_verbs_base.is_some()
+            || spec.capability_verbs_s.is_some()
+            || spec.capability_verbs_ing.is_some()
+            || spec.hedges.is_some())
+            && !denial
+        {
+            return Err(format!(
+                "rule {id}: the subject, negation, and capability-verb \
+                 parameters need capability-denial"
+            ));
+        }
+        if spec.markers.is_some() && !rationale {
+            return Err(format!("rule {id}: markers need rationale-leak"));
+        }
+        let tool_nouns = match (denial || rationale, &spec.tool_nouns_lexicon) {
+            (true, Some(path)) => lexicon(path)?
+                .into_iter()
+                .map(|t| t.to_lowercase())
+                .collect(),
+            (true, None) => {
+                return Err(format!("rule {id} names no tool_nouns_lexicon"));
+            }
+            (false, _) => Vec::new(),
+        };
+        // Every capability-denial parameter is required for that mechanism
+        // and absent everywhere else, which the check above already enforced.
+        let req = |field: &str, list: Option<Vec<String>>| -> Result<Vec<String>, String> {
+            if denial {
+                word_list(&id, field, list)
+            } else {
+                Ok(Vec::new())
+            }
+        };
+        let subjects = req("subjects", spec.subjects)?;
+        let determiners = req("determiners", spec.determiners)?;
+        let negative_subjects = req("negative_subjects", spec.negative_subjects)?;
+        let negative_determiners = req("negative_determiners", spec.negative_determiners)?;
+        let coordinators = req("coordinators", spec.coordinators)?;
+        let imperative_negations = req("imperative_negations", spec.imperative_negations)?;
+        let finite_negations = req("finite_negations", spec.finite_negations)?;
+        let capability_verbs_base = req("capability_verbs_base", spec.capability_verbs_base)?;
+        let capability_verbs_s = req("capability_verbs_s", spec.capability_verbs_s)?;
+        let capability_verbs_ing = req("capability_verbs_ing", spec.capability_verbs_ing)?;
+        let hedges = req("hedges", spec.hedges)?;
+        let window = |field: &str, given: Option<usize>| match (denial, given) {
+            (true, Some(0)) | (true, None) => Err(format!(
+                "rule {id}: capability-denial requires a {field} of at least 1"
+            )),
+            (true, Some(w)) => Ok(w),
+            (false, _) => Ok(0),
+        };
+        let negation_window = window("negation_window", spec.negation_window)?;
+        let verb_window = window("verb_window", spec.verb_window)?;
+        let markers = if rationale {
+            word_list(&id, "markers", spec.markers)?
+        } else {
+            Vec::new()
+        };
         let exemptions: Vec<String> = spec
             .exemptions
             .unwrap_or_default()
@@ -498,6 +650,21 @@ pub fn load() -> Result<Vec<Rule>, String> {
             shingle_words,
             min_run_words,
             max_reports,
+            subjects,
+            determiners,
+            negative_subjects,
+            negative_determiners,
+            coordinators,
+            tool_nouns,
+            imperative_negations,
+            finite_negations,
+            negation_window,
+            verb_window,
+            capability_verbs_base,
+            capability_verbs_s,
+            capability_verbs_ing,
+            hedges,
+            markers,
         });
     }
     if rules.is_empty() {
@@ -562,6 +729,8 @@ mod tests {
             "SD-Q003",
             "SD-Q005",
             "SD-Q006",
+            "SD-Q007",
+            "SD-Q008",
         ];
         let expected: Vec<&str> = residue.iter().chain(quality.iter()).copied().collect();
         assert_eq!(ids, expected);
@@ -636,6 +805,8 @@ mod tests {
             "SD-Q003",
             "SD-Q005",
             "SD-Q006",
+            "SD-Q007",
+            "SD-Q008",
         ] {
             assert_eq!(class_of(id), Some(Class::Individual), "{id}");
         }
@@ -820,8 +991,97 @@ mod tests {
             assert!(q004.stoplist.contains(&opener.to_string()), "{opener}");
         }
         assert_eq!(q004.stoplist.len(), 18);
-        // The T2-T4 trigger regexes ride the shared regex pass.
-        assert_eq!(q004.patterns.len(), 4);
+        // The T2-T4 trigger regexes plus the and-not spelling ride the
+        // shared regex pass.
+        assert_eq!(q004.patterns.len(), 5);
+        // The conjunction is `and` alone: the or-spelling fires on the honest
+        // idiom "whether or not", and the engine takes no look-behind.
+        assert!(q004.patterns.iter().any(|p| p.contains(r"\band\s{1,8}not")));
+        assert!(!q004.patterns.iter().any(|p| p.contains("(and|or)")));
+    }
+
+    #[test]
+    fn q007_and_q008_share_one_tool_noun_set() {
+        let rules = load().unwrap();
+        let q007 = rules.iter().find(|r| r.id == "SD-Q007").unwrap();
+        assert_eq!(q007.mechanism, Mechanism::CapabilityDenial);
+        assert_eq!(q007.negation_window, 4);
+        assert_eq!(q007.verb_window, 3);
+        assert!(q007.hedges.contains(&"no * is evidence".to_string()));
+        assert!(q007.markers.is_empty());
+        // The subject set: `that` collides with the relativizer and `they`
+        // was never carried. The negative subjects take their own
+        // determiners, one of which is several words.
+        assert_eq!(q007.subjects, ["it", "this"]);
+        assert_eq!(q007.determiners, ["the"]);
+        assert!(q007
+            .negative_determiners
+            .contains(&"none of the".to_string()));
+        // Capability verbs gate every spelling, split by form so the
+        // subjectless spelling can demand an inflected verb. Function verbs
+        // are absent by design, because denying one states a scope fact.
+        let all_verbs: Vec<&String> = q007
+            .capability_verbs_base
+            .iter()
+            .chain(&q007.capability_verbs_s)
+            .chain(&q007.capability_verbs_ing)
+            .collect();
+        assert_eq!(q007.capability_verbs_base.len(), 17);
+        assert_eq!(q007.capability_verbs_s.len(), 17);
+        assert_eq!(q007.capability_verbs_ing.len(), 17);
+        for verb in ["detect", "scores", "guaranteeing", "replace", "identifies"] {
+            assert!(all_verbs.iter().any(|v| *v == verb), "{verb}");
+        }
+        for excluded in [
+            "find", "fire", "fires", "catch", "block", "validate", "verify",
+        ] {
+            assert!(!all_verbs.iter().any(|v| *v == excluded), "{excluded}");
+        }
+        // The two negation classes: only the imperative-capable set can open
+        // a command, and bare `not` is in neither.
+        assert_eq!(q007.imperative_negations, ["do not", "don't", "never"]);
+        assert!(q007.finite_negations.contains(&"does not".to_string()));
+        assert!(!q007.finite_negations.contains(&"never".to_string()));
+        // The coordinator list serves the imperative test and the subject
+        // match alike, so `and it does not ...` reads like `it does not ...`.
+        assert_eq!(q007.coordinators, ["and", "or", "but", "yet", "so", "nor"]);
+        // The noun-object negations belong to family 2, not family 1.
+        for dropped in ["makes no", "carries no", "has no", "not", "no"] {
+            let held = q007
+                .imperative_negations
+                .iter()
+                .chain(&q007.finite_negations)
+                .any(|n| n == dropped);
+            assert!(!held, "{dropped}");
+        }
+        // One tool-noun set, defined in one file and named by both rules.
+        let q008 = rules.iter().find(|r| r.id == "SD-Q008").unwrap();
+        assert_eq!(q008.mechanism, Mechanism::RationaleLeak);
+        assert_eq!(q007.tool_nouns, q008.tool_nouns);
+        assert_eq!(q007.tool_nouns, lexicon("inbound/tool-nouns.txt").unwrap());
+        for noun in [
+            "tool", "linter", "crate", "rule", "check", "gate", "detector", "guard", "report",
+            "finding", "score", "output", "result", "test",
+        ] {
+            assert!(q007.tool_nouns.contains(&noun.to_string()), "{noun}");
+            let plural = format!("{noun}s");
+            assert!(q007.tool_nouns.contains(&plural), "{plural}");
+        }
+        assert!(q008.imperative_negations.is_empty());
+        assert!(q008.finite_negations.is_empty());
+        assert!(q008.markers.contains(&"by design".to_string()));
+        // The rationale-leak anchor is the tool noun alone: no subject set
+        // is loaded for it.
+        assert!(q008.subjects.is_empty());
+        assert!(q008.determiners.is_empty());
+        // No other rule carries the clause-shape parameters.
+        for r in rules
+            .iter()
+            .filter(|r| r.id != "SD-Q007" && r.id != "SD-Q008")
+        {
+            assert!(r.subjects.is_empty(), "{}", r.id);
+            assert!(r.tool_nouns.is_empty(), "{}", r.id);
+        }
     }
 
     #[test]
