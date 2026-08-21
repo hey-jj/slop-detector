@@ -1,6 +1,6 @@
 [package]
 name = "slop-detector"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -12,8 +12,11 @@ repository = "https://github.com/hey-jj/slop-detector"
 include = [
     "src/**",
     "data/**",
+    "skills/**",
+    "tests/**",
     "Cargo.toml",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE-MIT",
     "LICENSE-APACHE",
 ]

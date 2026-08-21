@@ -94,6 +94,8 @@ pub(crate) struct DenialRule {
     /// The third-person forms alone, which are all the subjectless spelling
     /// takes behind an imperative-capable negation.
     capability_third: HashSet<String>,
+    /// The base forms alone, which the coordinated case takes behind `and`.
+    capability_base: HashSet<String>,
     hedges: Vec<Vec<String>>,
     /// The shared tool-noun set, kept for the adjacency arm's referent test.
     tool_nouns: HashSet<String>,
@@ -328,6 +330,7 @@ fn build() -> Result<Compiled, String> {
                         .cloned()
                         .collect(),
                     capability_third: rule.capability_verbs_s.iter().cloned().collect(),
+                    capability_base: rule.capability_verbs_base.iter().cloned().collect(),
                     hedges: rule.hedges.iter().map(|p| phrase_tokens(p)).collect(),
                     tool_nouns: rule.tool_nouns.iter().cloned().collect(),
                 });
@@ -463,14 +466,142 @@ fn pictographic(c: char) -> bool {
         0x2600..=0x27BF | 0x2B00..=0x2B5F | 0x1F000..=0x1FAFF)
 }
 
-/// True when `at` sits at a block or sentence start: the start of the text,
-/// after a line break (leading whitespace and plain-text bullet markers
-/// skipped), or after sentence-ending punctuation.
-fn at_block_start(src: &str, at: usize) -> bool {
-    for c in src[..at].chars().rev() {
+/// The list markers a writer may put in front of the first word. The four
+/// bullet glyphs also appear in `LEADING_DECORATION`, because ai-slop and
+/// unslop hold one combined set while this tree splits the roles: its marker
+/// arm carries the ASCII list openers too. Both roles skip, so the overlap
+/// changes nothing.
+///
+/// Fleet-wide set, fixed by F-R14a and F-R14e. Edit this list and
+/// `LEADING_DECORATION` together, and in all three repos.
+///
+/// Measured over 3.08M lines of the fleet corpus: U+2022 appears 205 times,
+/// 136 of them line-leading. U+2023, U+2043, and U+2219 have a combined
+/// population of one, which every corpus available to the fleet reads as
+/// indistinguishable from zero. They are carried on cost asymmetry and on
+/// the completeness of the set, never on measured need. The asymmetry is
+/// one-directional: widening a skip set turns silences into findings and
+/// never the reverse, though a finding it creates can still be wrong and
+/// still goes to the reader. U+00B7 is deliberately absent, on 2,341
+/// occurrences with only 184 line-leading: the middle dot is an inline
+/// separator and a letter in Catalan, so a word behind one opens nothing.
+const LEADING_MARKERS: [char; 9] = [
+    '-', '*', '+', '>', '#', '\u{2022}', '\u{2023}', '\u{2043}', '\u{2219}',
+];
+
+/// What a writer may put in front of the first word as decoration, as
+/// inclusive codepoint ranges. A single codepoint is written as a range onto
+/// itself so the table reads one way throughout.
+///
+/// Fleet-wide set, fixed by F-R14a and F-R14e, and the same codepoints
+/// `is_leading_decoration` carries in ai-slop and unslop. The order below
+/// follows theirs so the three lists diff cleanly. Edit this list and
+/// `LEADING_MARKERS` together, and in all three repos.
+///
+/// The Geometric Shapes block is what the measurement turned on: the nested
+/// list glyphs a paste brings with it live there, and they led 3,474 lines
+/// of the corpus. Letters, digits, and the punctuation that carries a
+/// sentence forward stay out, since a comma in front of a word puts the word
+/// mid-sentence.
+///
+/// The whole union is carried because the walk stops at the first character
+/// it does not cover. One uncovered glyph defeats every covered glyph beside
+/// it, and a pasted bullet run mixes them as a matter of course, so
+/// `▪ 🎉 Moreover` needs both blocks present to read as an opening.
+///
+/// Kept separate from `pictographic`, which answers a different question for
+/// SD-R003: whether a codepoint joins an emoji ZWJ sequence. Widening that
+/// one would move an unrelated rule.
+const LEADING_DECORATION: [(u32, u32); 22] = [
+    (0x2022, 0x2022), // bullet
+    (0x2023, 0x2023), // triangular bullet
+    (0x2043, 0x2043), // hyphen bullet
+    (0x2219, 0x2219), // bullet operator
+    (0x200D, 0x200D), // zero width joiner
+    (0x20E3, 0x20E3), // combining enclosing keycap
+    (0xFE0E, 0xFE0F), // variation selectors 15 and 16
+    (0x203C, 0x203C), // double exclamation
+    (0x2049, 0x2049), // exclamation question
+    (0x2122, 0x2122), // trade mark
+    (0x2139, 0x2139), // information
+    (0x2190, 0x21FF), // arrows
+    (0x2300, 0x23FF), // miscellaneous technical
+    (0x24C2, 0x24C2), // circled M
+    (0x25A0, 0x25FF), // geometric shapes
+    (0x2600, 0x27BF), // miscellaneous symbols and dingbats
+    (0x2B00, 0x2BFF), // miscellaneous symbols and arrows
+    (0x3030, 0x3030),
+    (0x303D, 0x303D),
+    (0x3297, 0x3297),
+    (0x3299, 0x3299),
+    // The emoji planes, which include the skin-tone modifiers and the
+    // regional indicators.
+    (0x1F000, 0x1FAFF),
+];
+
+fn is_leading_decoration(c: char) -> bool {
+    let u = c as u32;
+    LEADING_DECORATION
+        .iter()
+        .any(|&(lo, hi)| (lo..=hi).contains(&u))
+}
+
+/// The ordered-list marker ending at `punct`, which holds a `.` or a `)`.
+/// Returns the offset of the first digit when the run is a list marker,
+/// meaning a digit run that opens its line behind nothing but whitespace.
+/// A digit run following other text on the line is not a marker: in
+/// `See item 3. Moreover` the `3` sits behind `item`, so the `.` is doing
+/// its ordinary work of ending a sentence.
+fn ordered_marker(src: &str, punct: usize) -> Option<usize> {
+    let digits_end = punct;
+    let mut digits_start = punct;
+    for (off, c) in src[..digits_end].char_indices().rev() {
+        if c.is_ascii_digit() {
+            digits_start = off;
+        } else {
+            break;
+        }
+    }
+    if digits_start == digits_end {
+        return None; // no digit run, so no marker
+    }
+    // Only whitespace may stand between the digit run and the line start.
+    for c in src[..digits_start].chars().rev() {
         match c {
-            ' ' | '\t' | '-' | '*' | '\u{2022}' => continue,
-            '\n' | '\r' | '.' | '!' | '?' => return true,
+            '\n' | '\r' | '\u{2028}' | '\u{2029}' => return Some(digits_start),
+            c if c.is_whitespace() => continue,
+            _ => return None,
+        }
+    }
+    Some(digits_start)
+}
+
+/// True when `at` sits at a block or sentence start: the start of the text,
+/// after a line break, or after sentence-ending punctuation. Anything a
+/// writer puts in front of the first word without starting a new thought is
+/// skipped on the way back. That covers whitespace, the unordered list
+/// markers, an ordered list marker (`1.`, `2)`), a blockquote `>`, a heading
+/// `#`, and a leading emoji run. Skipping is self-gating, because the walk
+/// has to reach a line start or a terminal to return true: in `C# Moreover`
+/// the `#` is skipped and the `C` behind it ends the walk on false.
+fn at_block_start(src: &str, at: usize) -> bool {
+    let mut i = at;
+    while let Some(c) = src[..i].chars().next_back() {
+        let cs = i - c.len_utf8();
+        match c {
+            '\n' | '\r' | '\u{2028}' | '\u{2029}' => return true,
+            '!' | '?' => return true,
+            '.' | ')' => {
+                if let Some(marker) = ordered_marker(src, cs) {
+                    i = marker;
+                    continue;
+                }
+                // `i` is the offset just past the punctuation, which is the
+                // terminal test's own argument. A `)` never ends a sentence.
+                return c == '.' && period_is_terminal(src, i);
+            }
+            c if LEADING_MARKERS.contains(&c) => i = cs,
+            c if c.is_whitespace() || is_leading_decoration(c) => i = cs,
             _ => return false,
         }
     }
@@ -712,6 +843,14 @@ fn period_is_terminal(text: &str, dot_end: usize) -> bool {
 /// Both whitespace loops match ASCII whitespace only (space/tab/LF/CR), by
 /// design, mirroring ai-slop's SLOP-C007: a non-ASCII space inside a
 /// contrastive tail is an accepted false negative.
+///
+/// Words ending in `-ing` that the participial exemption never covers: the
+/// four quantifier pronouns, which are ordinary NP heads, and the preposition
+/// `during`, which opens one. Denying `during` the exemption is what keeps
+/// the participle test honest, and whether `, not during matching.` should
+/// fire at all is a question about the rule's scope, not about this list.
+const NOT_A_PARTICIPLE: [&str; 5] = ["nothing", "anything", "something", "everything", "during"];
+
 fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
     let rest = text.get(comma + 1..)?;
     let mut i = 0usize;
@@ -751,6 +890,20 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
         }
     }
     if ws == 0 {
+        return None;
+    }
+    // A participial adjunct is not a contrastive tail: `never judging anyone`
+    // says how she listened, not what she did instead. The exemption is
+    // narrow. The negation has to be immediately followed by the `-ing` word,
+    // so a determiner in between keeps the tail (`not the beginning`, `not a
+    // building`), and five words wear the same letters without being
+    // participles.
+    let first: String = rest[j..]
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '\'')
+        .flat_map(char::to_lowercase)
+        .collect();
+    if first.ends_with("ing") && !NOT_A_PARTICIPLE.contains(&first.as_str()) {
         return None;
     }
     // NP scan: bounded, no clause punctuation, must close with a terminal,
@@ -1151,6 +1304,33 @@ fn denied_capability(toks: &[Tok], head: usize, dr: &DenialRule) -> Option<Strin
     None
 }
 
+/// The coordinated case: `and never detect authorship` at the tail of a
+/// sentence whose earlier segment names the thing. Read alone the segment is
+/// a command, because an imperative-capable negation governs a base-form
+/// verb, and `imperative_clause` drops it for that reason. Read in place it
+/// continues the subject of the segment before it, and what it denies is a
+/// capability.
+///
+/// This test covers the segment half of that reading: the coordinator is
+/// exactly `and`, so `but`, `so`, and the rest keep the command reading; the
+/// negation heads the segment past the skip; and the verb it governs is a
+/// base form from the closed capability set. The sentence half, an earlier
+/// segment carrying a closed-set subject, belongs to `scan_denial`, which is
+/// the only place a segment can see its neighbours.
+fn coordinated_denial(toks: &[Tok], head: usize, dr: &DenialRule) -> bool {
+    if head == 0 || toks.first().map(|t| t.text.as_str()) != Some("and") {
+        return false;
+    }
+    dr.imperative_negations
+        .iter()
+        .filter_map(|n| phrase_at(toks, head, n))
+        .any(|after| {
+            toks[after.min(toks.len())..(after + dr.verb_window).min(toks.len())]
+                .iter()
+                .any(|t| dr.capability_base.contains(&t.text))
+        })
+}
+
 /// The imperative test, run on one clause before any family test. The clause
 /// is a command when its head token opens a negation phrase and the word
 /// that negation governs is a base-form verb (`Do not obey`). A clause-head
@@ -1219,6 +1399,9 @@ struct ClauseFacts {
     /// something else, so coreference cannot be tested and the segment
     /// counts toward the stack arm alone.
     arm_b_eligible: bool,
+    /// Whether the segment carries the coordinated shape (`and never detect
+    /// authorship`). The sentence loop decides what to do with it.
+    coordinated: bool,
 }
 
 /// The span a finding cites. It opens where the analysis opened, at the
@@ -1264,6 +1447,7 @@ fn classify_clause(
             subject,
             referent: None,
             arm_b_eligible: false,
+            coordinated: coordinated_denial(&toks, head, dr),
         };
     }
     let denied = denied_capability(&toks, head, dr);
@@ -1302,6 +1486,7 @@ fn classify_clause(
         },
         subject,
         arm_b_eligible,
+        coordinated: false,
     }
 }
 
@@ -1328,6 +1513,21 @@ fn scan_denial(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
                         let toks = tokens_in(src, &clause);
                         for segment in split_at_coordinators(src, &clause, &toks, dr) {
                             facts.push(classify_clause(src, segment, &clause, dr));
+                        }
+                    }
+                    // The coordinated case, decided here because it is the
+                    // only test that reads one segment against another. An
+                    // `and` segment that reads as a command on its own is a
+                    // denial when an earlier segment of the same sentence
+                    // named the thing, because that is the subject it
+                    // continues. It borrows that subject rather than naming
+                    // one, so it takes the absent-subject key and the
+                    // adjacency arm reads it as coreferent by definition.
+                    for i in 0..facts.len() {
+                        if facts[i].coordinated && facts[..i].iter().any(|f| f.subject.is_some()) {
+                            facts[i].qualifies = true;
+                            facts[i].referent = None;
+                            facts[i].arm_b_eligible = true;
                         }
                     }
                     facts

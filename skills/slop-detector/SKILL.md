@@ -281,9 +281,18 @@ rule-caught, four need your eye. Name the shape when you report one.
    house style, not authorship.` The same rule catches one conjunction
    spelling, `X and not Y`, where a preposition or article follows the
    `not`: `drawn from statement punctuation and not from writing.` The
-   `or not` and `but not` spellings are yours. No rule will take them:
-   `whether or not the flag is present` is an honest idiom sharing the
-   shape, and the engine has no look-behind to separate the two.
+   `or not` and `but not` spellings are yours, and the measurement is
+   why: every `or not` instance found sat inside `whether or not`, an
+   honest idiom sharing the shape, and every `but not` instance found
+   was an honest exclusion. The rule also drops participial tails.
+   `She listened, never judging anyone.` describes the manner of her
+   listening, so nothing there is a contrast. The `-ing` word has to
+   sit directly against the negation for that, so `not the beginning`
+   and `not a building` still report, and `nothing`, `anything`,
+   `something`, `everything`, and `during` are denied the exemption.
+   What the exemption gives up is yours: a real contrast whose noun
+   phrase opens on a bare gerund, as in `It reports the span, not
+   matching.`
 2. Mid-sentence pair (`not X, but Y`): rule-caught, `SLOP-C008`. `The
    goal is not to dismiss breadth, but to require depth.`
 3. Two-sentence reframe: partly rule-caught (`SLOP-C002`, `SLOP-C008`
@@ -321,8 +330,17 @@ rule-caught, four need your eye. Name the shape when you report one.
    second. Three forms of the denial are yours to catch, all silent by
    design. An adjectival denial carries no verb (`never demotable`, `not
    scoreable`). A bare-form verb behind `never` or `do not` with no
-   subject reads as a command (`never detect authorship`), so the rule
-   leaves it alone. A denial built on a function verb never reaches the
+   subject reads as a command (`Never detect authorship.`), so the rule
+   leaves it alone, unless the segment opens on `and` and an earlier
+   segment of the same sentence named the thing. `The rules read text
+   and never detect authorship.` reports the segment `never detect
+   authorship`, because the subject it continues sits right in front of
+   it. The coordinator has to be `and`, so `The tool is fast, but never
+   replace review with it.` and `The findings are noisy, so do not
+   judge them.` are both still yours, as is the bare comma. One shape
+   overshoots and you absorb it: `The tool is fast, and never replace
+   review with it.` reports, where most writers would have spelled it
+   with `but`. A denial built on a function verb never reaches the
    rule at all, because the capability-verb set excludes `find`, `fire`,
    `catch`, `block`, and `validate`, so `the check does not fire on
    prose` is silent whatever work it is doing. That silence belongs to

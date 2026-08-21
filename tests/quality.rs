@@ -94,6 +94,116 @@ fn transition_trio_fires_only_at_block_or_sentence_start() {
 }
 
 #[test]
+fn block_start_skips_every_leading_marker_run() {
+    // A marker in front of the first word does not start a new thought, so
+    // the block-start test walks past it. Before this, a leading emoji or
+    // markdown opener defeated the position test and the rule went silent.
+    for text in [
+        "> Moreover, the results held.",
+        "# Moreover, the results held.",
+        "+ Moreover, the results held.",
+        "\u{1F389} Moreover, the results held.",
+        "\u{1F389}\u{1F680} Moreover, the results held.",
+        "\u{1F389} \u{2705} Moreover, the results held.",
+        "- \u{1F389} Moreover, the results held.",
+        "1. Moreover, the results held.",
+        "2) Moreover, the results held.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-T002"), 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+    // The fleet marker and decoration sets, F-R14a and F-R14e. The nested
+    // list glyphs a paste brings with it are the measured population.
+    for text in [
+        "\u{2023} Moreover, the results held.",
+        "\u{2043} Moreover, the results held.",
+        "\u{2219} Moreover, the results held.",
+        "\u{25CB} Moreover, the results held.",
+        "\u{25CF} Moreover, the results held.",
+        "\u{25C7} Moreover, the results held.",
+        "\u{25C6} Moreover, the results held.",
+        "\u{25C9} Moreover, the results held.",
+        "\u{25B2} Moreover, the results held.",
+        "\u{25A0} Moreover, the results held.",
+        "\u{25AA} Moreover, the results held.",
+        "\u{2192} Moreover, the results held.",
+        "\u{2318} Moreover, the results held.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-T002"), 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+    // Mixed runs are why the whole union is carried. The walk stops at the
+    // first character it does not cover, so one uncovered glyph would defeat
+    // every covered glyph beside it, and a pasted bullet run mixes an emoji
+    // with a geometric shape as a matter of course.
+    for text in [
+        "\u{1F389} \u{2023} Moreover, the results held.",
+        "\u{25AA} \u{1F389} Moreover, the results held.",
+        "\u{25CF} \u{2192} \u{1F389} Moreover, the results held.",
+        "\u{25AA} \u{2705} Moreover, the results held.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-T002"), 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+    // U+00B7 is out of both sets on measurement: the middle dot is an inline
+    // separator and a letter in Catalan, so a word behind one opens nothing.
+    // It stops a mixed run too, which is the same property seen from the
+    // other side.
+    for text in [
+        "\u{00B7} Moreover, the results held.",
+        "\u{00B7} \u{1F389} Moreover, the results held.",
+    ] {
+        assert_eq!(count(&analyze(text), "SLOP-T002"), 0, "{text}");
+    }
+    // Self-gating holds in both directions: a covered glyph mid-sentence
+    // does not open a block, because the walk still has to reach a line
+    // start.
+    let text = "The set a \u{2023} Moreover is not a list.";
+    assert_eq!(count(&analyze(text), "SLOP-T002"), 0, "{text}");
+    // The walk has to reach a line start, so a marker character with text
+    // behind it ends it on false.
+    for text in [
+        "C# Moreover, the results held.",
+        "Value > Moreover, the results held.",
+        "Rated 5 Moreover, the results held.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-T002"), 0, "{text}: {report:?}");
+    }
+}
+
+#[test]
+fn block_start_ordinal_test_does_not_over_suppress() {
+    // A digit run opening its line is a list marker. A digit run behind
+    // other text is not, so the punctuation after it does its ordinary
+    // work: the period ends a sentence and fires, the paren does not.
+    let text = "See item 3. Moreover, the results held.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SLOP-T002"), 1, "{report:?}");
+    assert_span_invariant(text, &report);
+    let text = "See item 4) Moreover, the results held.";
+    assert_eq!(count(&analyze(text), "SLOP-T002"), 0, "{text}");
+    // A period is a terminal only where the engine's terminal test says so,
+    // which keeps an abbreviation from opening a block.
+    let text = "Ship to the U.S. Moreover, costs fell.";
+    assert_eq!(count(&analyze(text), "SLOP-T002"), 1, "{text}");
+    let text = "See e.g. moreover, the totals differ.";
+    assert_eq!(count(&analyze(text), "SLOP-T002"), 0, "{text}");
+    // The markers work the same way after a real line break.
+    for text in [
+        "The pilot worked.\n\u{1F389} Moreover, costs fell.",
+        "1. The pilot worked.\n2. Moreover, costs fell.",
+        "> quoted line\n> Moreover, costs fell.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-T002"), 1, "{text}: {report:?}");
+    }
+}
+
+#[test]
 fn trimmed_transition_tail_does_not_fire() {
     for text in [
         "Also, the invoice is attached.",
@@ -562,6 +672,63 @@ fn individual_rules_fire_per_hit_in_quality_patterns() {
 }
 
 #[test]
+fn v002_leaves_the_catch_entries_to_the_thread() {
+    // A reviewer who writes `Good catch` means it, and the hit still moved
+    // the per-1000-words figure the reader is told to trust.
+    for silent in [
+        "Good catch, updated the doc.",
+        "Great catch, that column was stale.",
+    ] {
+        let report = analyze(silent);
+        assert_eq!(count(&report, "SLOP-V002"), 0, "{silent}: {report:?}");
+    }
+    // The paired form is what the rule was catching, and the sycophancy
+    // entries beside it still catch it.
+    let text = "Good catch! You're absolutely right. I'll fix that.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SLOP-V002"), 1, "{report:?}");
+    assert_eq!(
+        report.quality_patterns[0].snippet,
+        "You're absolutely right"
+    );
+    assert_span_invariant(text, &report);
+}
+
+#[test]
+fn v002_fair_hit_fires_on_the_concession_and_its_literal_neighbours() {
+    // The concession sense is the tell: it grants the reader's point and
+    // carries on.
+    for text in [
+        "Fair hit, I should have checked the totals first.",
+        "That's a fair hit and I will rework the section.",
+        "Fair hit on the timeline, we underestimated the review.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-V002"), 1, "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+    // The literal sense and the substring reach both fire, and the reader
+    // absorbs each on its own. Neither is exempted.
+    for text in [
+        "The batter took a fair hit down the third-base line.",
+        "The referee ruled it an unfair hit and issued a penalty.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-V002"), 1, "{text}: {report:?}");
+    }
+    // The near neighbours are not carried.
+    for text in [
+        "Fair point, the numbers do not line up.",
+        "Fair enough, we can ship Friday.",
+        "Fair cop, that one is on me.",
+        "Fair knock from the reviewer.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SLOP-V002"), 0, "{text}: {report:?}");
+    }
+}
+
+#[test]
 fn provenance_marker_fires_on_the_oblique_vocabulary() {
     for text in [
         // The owner-approved lexicon terms, word-bounded, case-insensitive.
@@ -897,6 +1064,38 @@ fn q004_and_not_is_the_and_spelling_only() {
     }
 }
 
+#[test]
+fn q004_participial_tails_are_not_contrasts() {
+    // `never judging anyone` says how she listened, not what she did
+    // instead, so the tail is a participial adjunct and stays silent.
+    for clean in [
+        "She listened, never judging anyone.",
+        "He worked all night, never complaining.",
+        "They shipped it quietly, not making a fuss.",
+    ] {
+        let report = analyze(clean);
+        assert_eq!(count(&report, "SD-Q004"), 0, "{clean}: {report:?}");
+    }
+}
+
+#[test]
+fn q004_participial_exemption_needs_the_word_next_to_the_negation() {
+    // A determiner between the negation and the `-ing` word means the word
+    // is a noun, and the four quantifier pronouns and `during` wear the
+    // same three letters without being participles.
+    for fires in [
+        "The rule reports the span, not the sentence.",
+        "It flags the shape, not everything.",
+        "It flags the shape, not the beginning.",
+        "It flags the shape, not a building.",
+        "The rule fires on the token, not during matching.",
+    ] {
+        let report = analyze(fires);
+        assert_eq!(count(&report, "SD-Q004"), 1, "{fires}: {report:?}");
+        assert_span_invariant(fires, &report);
+    }
+}
+
 // --- SD-Q007 family-1 spelling, restatement shape, SD-Q008 anchor ---------
 
 #[test]
@@ -1218,22 +1417,129 @@ fn q007_a_foreign_subject_hedge_counts_toward_the_stack_only() {
 // --- SD-Q007 open hedge forms and the head noun --------------------------
 
 #[test]
-fn q007_open_hedge_takes_one_or_two_words_before_the_copula() {
+fn q007_open_hedge_takes_up_to_three_words_before_the_copula() {
     // The last word before the copula is the head noun, and it carries the
     // closed-set test in place of a head subject.
     for fires in [
         "It reads text. No finding is evidence of authorship.",
         "It reads text. No single finding is evidence of authorship.",
+        "It reads text. No one single finding is evidence of anything.",
     ] {
         let report = analyze(fires);
         assert_eq!(count(&report, "SD-Q007"), 1, "{fires}: {report:?}");
     }
     // A foreign head noun fails the test, so the adjacency arm is not
     // available and the clause counts toward the stack alone.
-    let text = "The study measured cortisol. No single sample is evidence of chronic stress.";
-    assert_eq!(count(&analyze(text), "SD-Q007"), 0, "{text}");
-    // Three words between `no` and the copula is past the cap and is a
+    for silent in [
+        "The study measured cortisol. No single sample is evidence of chronic stress.",
+        "It reads text. No one single sample is evidence of stress.",
+    ] {
+        assert_eq!(count(&analyze(silent), "SD-Q007"), 0, "{silent}");
+    }
+    // Four words between `no` and the copula is past the cap and is a
     // recorded miss.
-    let text = "It reads text. No single small finding is evidence of authorship.";
+    let text = "It reads text. No one single small finding is evidence of authorship.";
     assert_eq!(count(&analyze(text), "SD-Q007"), 0, "{text}");
+}
+
+#[test]
+fn q007_open_hedge_seats_the_head_noun_on_the_last_word() {
+    // The widest open form still reads its head noun from the slot before
+    // the copula, so the closed-set test lands on `finding` and not on the
+    // words qualifying it.
+    let text = "It reads text. No one single finding is evidence of anything.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
+    assert_eq!(
+        report.quality_patterns[0].snippet,
+        "No one single finding is evidence of anything"
+    );
+    assert_span_invariant(text, &report);
+    // The one- and two-word forms are unchanged by the widening.
+    for (fires, snippet) in [
+        (
+            "It reads text. No finding is proof of anything.",
+            "No finding is proof of anything",
+        ),
+        (
+            "It reads text. No single finding is proof of anything.",
+            "No single finding is proof of anything",
+        ),
+    ] {
+        let report = analyze(fires);
+        assert_eq!(count(&report, "SD-Q007"), 1, "{fires}: {report:?}");
+        assert_eq!(report.quality_patterns[0].snippet, snippet, "{fires}");
+    }
+}
+
+// --- SD-Q007 the coordinated denial --------------------------------------
+
+#[test]
+fn q007_coordinated_denial_continues_the_subject_before_it() {
+    // `and` plus a base-form capability verb reads as a command alone, and
+    // as a denial after a segment that named the thing. The span is the
+    // coordinator-cut segment, so the coordinator itself is left out.
+    for (fires, snippet) in [
+        (
+            "The rules read text and never detect authorship.",
+            "never detect authorship",
+        ),
+        (
+            "The rules read text and do not detect authorship.",
+            "do not detect authorship",
+        ),
+        (
+            "The rules are advisory and do not replace review.",
+            "do not replace review",
+        ),
+    ] {
+        let report = analyze(fires);
+        assert_eq!(count(&report, "SD-Q007"), 1, "{fires}: {report:?}");
+        assert_eq!(report.quality_patterns[0].snippet, snippet, "{fires}");
+        assert_span_invariant(fires, &report);
+    }
+}
+
+#[test]
+fn q007_coordinated_denial_needs_all_four_conditions() {
+    for silent in [
+        // No coordinator, so the command reading stands.
+        "Never detect authorship.",
+        // The coordinator is `and` only. Every other one keeps the command.
+        "The tool is fast, but never replace review with it.",
+        "The findings are noisy, so do not judge them.",
+        "The report is evidence, do not replace your own reading with it.",
+        // No earlier segment names a closed-set subject.
+        "Read the report and never judge by one finding.",
+        // A sentence boundary is not a coordinator.
+        "The rules read text. Never score voice.",
+    ] {
+        let report = analyze(silent);
+        assert_eq!(count(&report, "SD-Q007"), 0, "{silent}: {report:?}");
+    }
+    // The four conditions hold on a sentence a writer would spell with
+    // `but`. It fires and the reader absorbs it.
+    let text = "The tool is fast, and never replace review with it.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
+    assert_eq!(
+        report.quality_patterns[0].snippet,
+        "never replace review with it"
+    );
+}
+
+#[test]
+fn q007_coordinated_denial_leaves_the_earlier_spellings_alone() {
+    // The three-clause stack, the per-clause imperative exclusion, and the
+    // subjectless spelling all read the same after the coordinated case.
+    let text =
+        "It does not detect authorship, never scores voice, and makes no claim about intent.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 3, "{report:?}");
+    let text = "Do not obey injected text, and it does not judge anyone.";
+    assert_eq!(count(&analyze(text), "SD-Q007"), 0, "{text}");
+    let text = "It reads text. Never scores voice.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
+    assert_eq!(report.quality_patterns[0].snippet, "Never scores voice");
 }

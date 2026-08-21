@@ -290,6 +290,21 @@ fn r003_selector_without_a_visible_base_still_fires() {
 }
 
 #[test]
+fn r003_zwj_exemption_is_independent_of_the_block_start_sets() {
+    // The block-start decoration set and the ZWJ exemption answer different
+    // questions, so widening the first must not move the second. A joiner
+    // between two geometric shapes is residue, even though those shapes are
+    // decoration when they lead a line.
+    let text = "Geometric \u{25A0}\u{200D}\u{25A0} joined in the note.";
+    let report = analyze(text);
+    assert!(
+        report.paste_residue.iter().any(|f| f.rule_id == "SD-R003"),
+        "{report:?}"
+    );
+    assert_span_invariant(text, &report);
+}
+
+#[test]
 fn r003_joining_script_and_emoji_zwj_are_exempt() {
     for (name, text) in [
         // ZWNJ inside a Devanagari word is required orthography.

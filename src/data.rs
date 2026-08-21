@@ -276,6 +276,13 @@ pub struct Rule {
     pub hedges: Vec<String>,
     /// Rationale-leak marker phrases, both families flattened.
     pub markers: Vec<String>,
+    /// The rule's interpretive caveat, carried to the agent skill and never
+    /// evaluated by the engine. Held here so the guard-prose gate can read
+    /// it from the loaded table.
+    pub guard: String,
+    /// The informational weight note, where a rule carries one. Same
+    /// standing as `guard`: prose for a reader, not input to a scan.
+    pub weight: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -305,7 +312,6 @@ struct RuleSpec {
     class: Option<Class>,
     /// Informational weight note carried to the skill (e.g. the SLOP-I001
     /// lowest-weight ruling). Not evaluated by the engine.
-    #[allow(dead_code)]
     weight: Option<String>,
     position: Option<Position>,
     exemptions: Option<std::collections::BTreeMap<String, Vec<String>>>,
@@ -332,7 +338,6 @@ struct RuleSpec {
     capability_verbs_ing: Option<Vec<String>>,
     hedges: Option<Vec<String>>,
     markers: Option<Vec<String>>,
-    #[allow(dead_code)]
     guard: String,
 }
 
@@ -665,6 +670,8 @@ pub fn load() -> Result<Vec<Rule>, String> {
             capability_verbs_ing,
             hedges,
             markers,
+            guard: spec.guard,
+            weight: spec.weight,
         });
     }
     if rules.is_empty() {
@@ -1007,7 +1014,19 @@ mod tests {
         assert_eq!(q007.mechanism, Mechanism::CapabilityDenial);
         assert_eq!(q007.negation_window, 4);
         assert_eq!(q007.verb_window, 3);
-        assert!(q007.hedges.contains(&"no * is evidence".to_string()));
+        // The open hedge forms run one, two, and three wildcards wide, over
+        // all four stems. The last wildcard is the head noun, so the cap
+        // stops at three: a fourth admits a prepositional phrase and the
+        // head-noun test would seat on the wrong noun.
+        for stem in ["is evidence", "are evidence", "is proof", "are proof"] {
+            for width in 1..=3 {
+                let stars = vec!["*"; width].join(" ");
+                let form = format!("no {stars} {stem}");
+                assert!(q007.hedges.contains(&form), "{form}");
+            }
+            let too_wide = format!("no * * * * {stem}");
+            assert!(!q007.hedges.contains(&too_wide), "{too_wide}");
+        }
         assert!(q007.markers.is_empty());
         // The subject set: `that` collides with the relativizer and `they`
         // was never carried. The negative subjects take their own
