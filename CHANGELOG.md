@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.1.7] - 2026-09-02
+
+### Added
+
+- `SD-Q009` decision-attribution, an individual-class quality rule. It reads
+  a decision credited to a role noun in the third person. Two closed role
+  sets. With an open role (owner, maintainer, author, principal, proxy,
+  operator, orchestrator, human, lead, user, reviewer) it reads the
+  possessive on a decision noun (`Owner's ruling, 2026-08-20`, `the
+  maintainer's call`), a verdict verb (`the owner ruled`, `the proxy signed
+  off`), the by-form (`requested by the user`), the hyphen compound
+  (`owner-flagged`), `per the owner`, `at the user's request`, and `on the
+  principal's instruction`. With a ledger role (owner, maintainer,
+  principal, proxy, orchestrator, lead) it also reads the loose verbs (`the
+  owner wants`, `the owner has ruled`), the loose possessives (`the owner's
+  request`, `in the owner's stead`), and the bare compound (`owner
+  decision`, `owner-proxy ruling`). Three shapes carry no role: a decision noun on an ISO date
+  (`ruling (2026-08-20)`), a line-start label (`Ruling:`, `Decision:`), and
+  the second person aimed at the signer (`per your ruling`, `as you directed`). A
+  trailing ISO date joins the span, so a dated stamp reports once. In
+  received text the shape is agent-loop residue: an agent drafting in a
+  person's name records where the choice came from, and the person named
+  never writes about themselves that way. Minutes, contracts, and consent
+  flows carry the same nouns honestly, so every hit reads against the
+  document's purpose. The loose verbs stay off the open roles, so `the user
+  asked` and `the author said` stay silent, and the verb sets carry verdict
+  verbs only, so `user-defined` and `set by the user` stay silent. The
+  roleless verb-plus-date stamp stays with `SD-Q006`. A four-week sweep of
+  session transcripts supplied the spellings.
+- The skill reads the new rule beside the ledger stamp under the individual
+  class.
+
 ## [0.1.6] - 2026-08-20
 
 ### Added

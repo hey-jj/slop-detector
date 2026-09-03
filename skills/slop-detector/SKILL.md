@@ -189,7 +189,7 @@ first and leaves structure standing.
 - `individual` findings read per hit, like residue. An assistant-voice
   phrase or a chat pleasantry in a received email is quotable evidence. A
   human replying in a live thread can use these sincerely, so weigh whether
-  the artifact has a conversational counterpart. Five rules in this class
+  the artifact has a conversational counterpart. Six rules in this class
   deserve their own reads:
   - `SD-Q006` ledger-stamp (`ruled 2026-08-14`, `measured 2026-08-01`,
     `the owner rules this on 2026-08-18`): a verdict verb directly against
@@ -200,6 +200,15 @@ first and leaves structure standing.
     release-date diction never fire. A forwarded decision record carries
     the shape legitimately, so read each hit against the document's
     purpose.
+  - `SD-Q009` decision-attribution (`Owner's ruling, 2026-08-20`, `the
+    maintainer's call`, `requested by the user`, `owner decision`, `the
+    owner wants`, `per your ruling`, a line-start `Ruling:`): a decision
+    credited to a role noun in the third person. The person named never
+    writes about themselves that way, so a proposal or a cover letter
+    carrying it was drafted by something standing outside its signer. The
+    same nouns are honest in minutes, contracts, and consent flows, so read
+    each hit against the document's purpose. The roleless dated stamp is
+    `SD-Q006`.
   - `SLOP-V004` agent-loop vocabulary (`this turn`, `as requested`,
     `point me at`, sentence-initial `Flagged for`): the sentence addresses
     an orchestrator or a drafting loop, and the document that carries it

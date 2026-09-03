@@ -738,6 +738,7 @@ mod tests {
             "SD-Q006",
             "SD-Q007",
             "SD-Q008",
+            "SD-Q009",
         ];
         let expected: Vec<&str> = residue.iter().chain(quality.iter()).copied().collect();
         assert_eq!(ids, expected);
@@ -814,6 +815,7 @@ mod tests {
             "SD-Q006",
             "SD-Q007",
             "SD-Q008",
+            "SD-Q009",
         ] {
             assert_eq!(class_of(id), Some(Class::Individual), "{id}");
         }

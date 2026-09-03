@@ -884,6 +884,109 @@ fn q006_release_diction_and_prose_date_forms_are_silent() {
     assert_span_invariant(text, &report);
 }
 
+// --- SD-Q009 decision-attribution -----------------------------------------
+
+/// The owner's specimen: the possessive with a decision noun, the date joined
+/// to the span, one report.
+#[test]
+fn q009_dated_possessive_reports_once_with_the_date() {
+    let text = "Owner's ruling, 2026-08-20: the profile stays.";
+    let report = analyze(text);
+    let hits: Vec<&str> = report
+        .quality_patterns
+        .iter()
+        .filter(|f| f.rule_id == "SD-Q009")
+        .map(|f| f.snippet.as_str())
+        .collect();
+    assert_eq!(hits, vec!["Owner's ruling, 2026-08-20"], "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+/// One case per spelling, pinned to the span.
+#[test]
+fn q009_every_spelling_fires_on_its_span() {
+    for (text, span) in [
+        ("The owner ruled that the lexicon drops the bare word.", "The owner ruled that"),
+        ("The maintainer's call was to keep the gate.", "The maintainer's call"),
+        ("This entry was requested by the user.", "requested by the user"),
+        ("The owner-flagged stack ships as a rule.", "owner-flagged"),
+        ("Code sign-off is Fable, by owner decision.", "owner decision"),
+        ("Per the owner, the digest stays sealed.", "Per the owner"),
+        ("The flag was added at the user's request.", "at the user's request"),
+        ("On the principal's instruction the run stopped.", "On the principal's instruction"),
+        ("Owner decision (2026-08-20): keep the profile.", "Owner decision (2026-08-20)"),
+        ("- Ruling: keep the profile.", "- Ruling:"),
+        ("Decision, 2026-08-19: the profile stays.", "Decision, 2026-08-19:"),
+        ("Ruled by owner proxy, the rule is candidate tier.", "Ruled by owner proxy"),
+        ("The proxy signed off on 2026-08-20.", "The proxy signed off on 2026-08-20"),
+        ("The owner\u{2019}s verdict was to drop the entry.", "The owner\u{2019}s verdict"),
+        ("The owner ruled this out after the inspection.", "The owner ruled this"),
+        ("The owner wants the profile kept.", "The owner wants"),
+        ("The orchestrator's call was to stop.", "The orchestrator's call"),
+        ("Owner directive (2026-08-24): stop the run.", "Owner directive (2026-08-24)"),
+        ("The maintainer asked for a smaller patch.", "The maintainer asked"),
+        ("Per your ruling, the digest stays.", "Per your ruling"),
+        ("You ruled that the bare word leaves.", "You ruled"),
+        ("The owner's request was a shorter README.", "The owner's request"),
+        ("The lead chose the second option.", "The lead chose"),
+        ("Ruling (2026-08-20): keep.", "Ruling (2026-08-20):"),
+        ("Ruled by a Fable agent in the owner's stead.", "the owner's stead"),
+        ("Drafted under owner-proxy Ruling 011.", "owner-proxy Ruling"),
+        ("The owner has ruled on everything current.", "The owner has ruled"),
+        ("The owner greenlit the batch.", "The owner greenlit"),
+        ("As you directed, the run stopped.", "As you directed"),
+    ] {
+        let report = analyze(text);
+        let hits: Vec<&str> = report
+            .quality_patterns
+            .iter()
+            .filter(|f| f.rule_id == "SD-Q009")
+            .map(|f| f.snippet.as_str())
+            .collect();
+        assert_eq!(hits, vec![span], "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+}
+
+/// Ordinary business English with the same role nouns stays silent.
+#[test]
+fn q009_ordinary_english_is_silent() {
+    for text in [
+        "Rate limits apply per user and per owner of a token.",
+        "User-defined types and user-specified widths are supported.",
+        "The value set by the user wins over the default.",
+        "The decision tree splits on the first field.",
+        "The owner of the file can change its mode.",
+        "The author's name appears in the header.",
+        "The reviewer's comments are attached to the manuscript.",
+        "The lead developer's laptop runs the tests.",
+        "A verdict from the court arrived on 2026-08-20.",
+        "Decision records live under docs/adr.",
+        "Ruled 2026-08-14 after the sweep.",
+        "Please send the signed lease back by Friday.",
+        "The user wants a faster export, and the author said so in the preface.",
+        "Maintainer approval is required for a merge.",
+        "The user asked for a dark theme.",
+        "Under your account settings the theme changes.",
+        "I said no, and you decided to wait.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q009"), 0, "{text}: {report:?}");
+    }
+}
+
+/// Seam with SD-Q006: the dated owner-verdict stamp reports under both, and
+/// the roleless stamp under SD-Q006 alone.
+#[test]
+fn q009_seam_with_the_ledger_stamp() {
+    let report = analyze("The owner rules this on 2026-08-18.");
+    assert_eq!(count(&report, "SD-Q006"), 1, "{report:?}");
+    assert_eq!(count(&report, "SD-Q009"), 1, "{report:?}");
+    let report = analyze("The floor was measured 2026-08-01 across the boundary.");
+    assert_eq!(count(&report, "SD-Q006"), 1, "{report:?}");
+    assert_eq!(count(&report, "SD-Q009"), 0, "{report:?}");
+}
+
 // --- SD-Q007 proleptic-capability-denial ----------------------------------
 
 /// The owner-recorded specimen: restatement, apophasis, hedged denial.
