@@ -1646,3 +1646,195 @@ fn q007_coordinated_denial_leaves_the_earlier_spellings_alone() {
     assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
     assert_eq!(report.quality_patterns[0].snippet, "Never scores voice");
 }
+
+// --- SD-Q010 hedging-litotes ------------------------------------------------
+
+fn q010_hits(report: &EvidenceReport) -> Vec<&str> {
+    report
+        .quality_patterns
+        .iter()
+        .filter(|f| f.rule_id == "SD-Q010")
+        .map(|f| f.snippet.as_str())
+        .collect()
+}
+
+/// The fixed shapes, one case per spelling, pinned to the span.
+#[test]
+fn q010_fixed_shapes_fire_on_their_span() {
+    for (text, span) in [
+        ("This is no small feat for a single maintainer.", "no small feat"),
+        ("Migrating the schema was no simple task.", "was no simple task"),
+        ("The rollout is not without its challenges.", "not without its challenges"),
+        ("Debugging the linker is far from trivial.", "far from trivial"),
+        ("It is hardly surprising that the build broke.", "hardly surprising"),
+        ("It's not exactly trivial to reproduce.", "not exactly trivial"),
+        ("The codebase isn't exactly simple.", "isn't exactly simple"),
+        ("Getting this to compile is no mean feat.", "no mean feat"),
+        ("The result leaves something to be desired.", "leaves something to be desired"),
+        ("It would not be wrong to say the design is fragile.", "It would not be wrong to say"),
+        ("This is, to put it mildly, a mess.", "to put it mildly"),
+        ("The API surface is not inconsiderable.", "not inconsiderable"),
+        ("Setup is not for the faint of heart.", "not for the faint of heart"),
+        ("The cost was not unimportant to the board.", "not unimportant"),
+        ("The delay proved inconsequential, and the fix was not inconsequential.", "not inconsequential"),
+        ("The team is not unfamiliar with the stack.", "not unfamiliar"),
+        ("Shipping on time is no easy feat.", "no easy feat"),
+        ("A clean build is not a small feat here.", "not a small feat"),
+        ("This is no small achievement for the team.", "no small achievement"),
+        ("The port is no small undertaking.", "no small undertaking"),
+        ("The win came in no small part from caching.", "in no small part"),
+        ("The gain is due in no small measure to the cache.", "in no small measure"),
+        ("The upgrade remains no easy task.", "remains no easy task"),
+        ("The plan is not without its difficulties.", "not without its difficulties"),
+        ("The move was not without irony.", "not without irony"),
+        ("The wire protocol is not exactly straightforward.", "not exactly straightforward"),
+        ("The setup wasn\u{2019}t exactly easy.", "wasn\u{2019}t exactly easy"),
+        ("The rebase is far from simple.", "far from simple"),
+        ("The proof is hardly trivial.", "hardly trivial"),
+        ("The throughput was less than stellar.", "less than stellar"),
+        ("The error messages leave much to be desired.", "leave much to be desired"),
+        ("It wouldn't be wrong to say the tests are thin.", "It wouldn't be wrong to say"),
+        ("It is safe to say the cache helped.", "It is safe to say"),
+        ("It's not hard to see why the build broke.", "It's not hard to see"),
+        ("It is not hard to imagine a crash here.", "It is not hard to imagine"),
+        ("The rollout was rough, to say the least.", "to say the least"),
+        ("Parsing a header is not rocket science.", "not rocket science"),
+        ("The migration was not a walk in the park.", "not a walk in the park"),
+        ("The upgrade is not exactly a walk in the park.", "not exactly a walk in the park"),
+        ("The cold path is not to be underestimated.", "not to be underestimated"),
+        ("The edge case is not to be overlooked.", "not to be overlooked"),
+        ("The lock order is not to be taken lightly.", "not to be taken lightly"),
+        ("A 40 percent gain is not to be sneezed at.", "not to be sneezed at"),
+        ("It handles retries, not to mention backoff.", ", not to mention"),
+        ("This isn't rocket science.", "isn't rocket science"),
+        ("The setup isn't for the faint of heart.", "isn't for the faint of heart"),
+        ("The risk isn't to be underestimated.", "isn't to be underestimated"),
+        ("The rollout wasn't without its challenges.", "wasn't without its challenges"),
+        ("The API surface isn't inconsiderable.", "isn't inconsiderable"),
+    ] {
+        let report = analyze(text);
+        assert_eq!(q010_hits(&report), vec![span], "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+}
+
+/// The measurable shapes, one case per spelling, pinned to the span.
+#[test]
+fn q010_measurable_shapes_fire_on_their_span() {
+    for (text, span) in [
+        ("It is not uncommon for the cache to miss.", "not uncommon"),
+        ("It is not entirely clear why the test flakes.", "not entirely clear"),
+        ("The current latency is less than ideal.", "less than ideal"),
+        ("The design is not without merit.", "not without merit"),
+        ("Porting to ARM is not a trivial undertaking.", "not a trivial undertaking"),
+        ("The benchmark numbers are not the best.", "not the best"),
+        ("The load is not insignificant.", "not insignificant"),
+        ("The queue is not quite right after failover.", "not quite right"),
+        ("The docs are not terribly helpful.", "not terribly"),
+        ("A cold start is not unusual on Mondays.", "not unusual"),
+        ("A retry is not unreasonable here.", "not unreasonable"),
+        ("A second outage is not unlikely.", "not unlikely"),
+        ("The fix is not inexpensive.", "not inexpensive"),
+        ("The regression was not unexpected.", "not unexpected"),
+        ("The team was not unaware of the risk.", "not unaware"),
+        ("The patch is not unwelcome.", "not unwelcome"),
+        ("The parser is not incapable of recovery.", "not incapable"),
+        ("The metric is not irrelevant to the decision.", "not irrelevant"),
+        ("The ordering is not illogical.", "not illogical"),
+        ("A double free is not unheard of in this module.", "not unheard of"),
+        ("The cache misses not infrequently under load.", "not infrequently"),
+        ("The rename is not a trivial change.", "not a trivial change"),
+        ("Rotation is not an easy task with live traffic.", "not an easy task"),
+        ("Recovery is not a simple matter.", "not a simple matter"),
+        ("The leak is not a minor issue.", "not a minor issue"),
+        ("The pipeline uses no small amount of memory.", "no small amount"),
+        ("The rewrite is not without risk.", "not without risk"),
+        ("The change is not without precedent.", "not without precedent"),
+        ("The move is not without its costs.", "not without its costs"),
+        ("The figure is not entirely accurate.", "not entirely accurate"),
+        ("The outcome was not entirely certain.", "not entirely certain"),
+        ("The API is not exactly ideal.", "not exactly ideal"),
+        ("The cold path is not exactly fast.", "not exactly fast"),
+        ("The port is not quite there yet.", "not quite there"),
+        ("The buffer is not quite enough.", "not quite enough"),
+        ("The docs are not particularly clear.", "not particularly"),
+        ("The build is not especially slow.", "not especially"),
+        ("The limit is not overly strict.", "not overly"),
+        ("The migration plan is far from ideal.", "far from ideal"),
+        ("The rollback path is far from settled.", "far from settled"),
+        ("The layout is less than optimal.", "less than optimal"),
+        ("It is not unreasonable to expect a retry.", "It is not unreasonable to"),
+        ("The fallback is not the worst option.", "not the worst"),
+        ("The error handling could be better.", "could be better"),
+        ("There is room for improvement in the parser.", "room for improvement"),
+        ("The patch isn't quite right.", "isn't quite right"),
+        ("The cause isn't entirely clear.", "isn't entirely clear"),
+        ("Timeouts aren't uncommon under load.", "aren't uncommon"),
+        ("The plan isn't without merit.", "isn't without merit"),
+        ("The heap wasn't terribly fragmented.", "wasn't terribly"),
+    ] {
+        let report = analyze(text);
+        assert_eq!(q010_hits(&report), vec![span], "{text}: {report:?}");
+        assert_span_invariant(text, &report);
+    }
+}
+
+/// Honest negations, quantifiers, comparisons, and bare adverbs stay silent.
+#[test]
+fn q010_honest_negations_are_silent() {
+    for text in [
+        "The tool does not support nested transactions.",
+        "Not all inputs are validated before parsing.",
+        "The buffer is not fully drained when close returns.",
+        "The cache is not always warm after failover.",
+        "A successful write does not necessarily imply durability.",
+        "A collision is not impossible because the hash has finite width.",
+        "The patch is not incorrect, but it omits the 32-bit path.",
+        "The two crashes are not unrelated.",
+        "The wire format is not unlike CBOR.",
+        "No simple task may invoke the privileged runner.",
+        "The buffer holds not less than 32 bytes.",
+        "The response is not without a Content-Type header.",
+        "The node has barely enough memory for the job.",
+        "The hook hardly ever fires under load.",
+        "The value is not exactly 1.0 after rounding.",
+        "The queue is not yet initialized.",
+        "The field is not included in the digest.",
+        "The token is not invalid; its status is unknown.",
+        "She chose not to mention the delay.",
+        "The two files are far from each other on disk.",
+        "The result is not dissimilar to the last run.",
+        "The report is not inaccurate on the totals.",
+        "The board was not indifferent to the outcome.",
+        "The endpoint is not unavailable during the window.",
+        "The export is not illegal under the licence.",
+        "The fix is not completely tested.",
+        "The cache is not really warm yet.",
+    ] {
+        let report = analyze(text);
+        assert_eq!(count(&report, "SD-Q010"), 0, "{text}: {report:?}");
+    }
+}
+
+/// Seam with the contrast family: the two-sentence reframe still reports
+/// SLOP-C002 on its own, and a litotes inside a contrast span reports both.
+#[test]
+fn q010_seam_with_the_contrast_rules() {
+    let report = analyze("It is not a linter. It is a gate.");
+    assert_eq!(count(&report, "SLOP-C002"), 1, "{report:?}");
+    assert_eq!(count(&report, "SD-Q010"), 0, "{report:?}");
+
+    let text = "It is not a linter. It is a gate, and the setup is no small feat.";
+    let report = analyze(text);
+    assert_eq!(count(&report, "SLOP-C002"), 1, "{report:?}");
+    assert_eq!(q010_hits(&report), vec!["no small feat"], "{report:?}");
+    assert_span_invariant(text, &report);
+}
+
+/// The filler entry keeps its rule.
+#[test]
+fn q010_it_goes_without_saying_stays_with_the_filler_rule() {
+    let report = analyze("It goes without saying that tests must pass.");
+    assert_eq!(count(&report, "SLOP-T001"), 1, "{report:?}");
+    assert_eq!(count(&report, "SD-Q010"), 0, "{report:?}");
+}

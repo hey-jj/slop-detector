@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.1.8] - 2026-09-29
+
+### Added
+
+- `SD-Q010` hedging-litotes, an individual-class quality rule. It reads a
+  claim carried by the negation of its opposite, or a stock understatement
+  standing in for the verdict. One closed set over two shapes. The fixed
+  shapes have no honest reading in confident prose: the negated adjectives
+  behind `not` (`not inconsiderable`, `not unimportant`), the negated
+  difficulty forms (`no small feat`, `no mean feat`, `in no small part`, `was
+  no simple task`), `not without its challenges`, `not exactly trivial`,
+  `isn't exactly simple`, `far from trivial`, `hardly
+  surprising`, `less than stellar`, `leaves something to be desired`, `it
+  would not be wrong to say`, `it is safe to say`, `it is not hard to see`,
+  `to say the least`, `to put it mildly`, `not rocket science`, `not a walk
+  in the park`, `not for the faint of heart`, `not to be underestimated`,
+  and a comma-led `not to mention`. The measurable shapes can carry a
+  literal count, rate, rank, or evidence gap: `not terribly`, `not uncommon`
+  and eleven other negated adjectives, `not unheard of`, `not infrequently`, `not a
+  trivial undertaking`, `no small amount`, `not without merit`, `not
+  entirely clear`, `not exactly ideal`, `not quite right`, `not
+  particularly`, `far from ideal`, `less than ideal`, `it is not
+  unreasonable to`, `not the best`, `could be better`, and `room for
+  improvement`. Every member led by `not` also takes `isn't`, `wasn't`,
+  `aren't`, and `weren't`. Every adjective is listed and no prefix wildcard exists, so
+  `not impossible`, `not unlike`, `not incorrect`, `not necessarily`, `not
+  yet`, a bare `far from`, and a bare `hardly` stay silent, and a
+  clause-initial `No simple task` is a quantifier and stays silent. The span
+  is the phrase itself, so a hit inside a contrast span reports beside the
+  contrast rule and the two-sentence reframe still reports `SLOP-C002`. In
+  received text a run of hits marks prose that hedges by habit, and the
+  honest collisions are frequent, so every hit reads against the document's
+  purpose. `it goes without saying` stays with `SLOP-T001`.
+- The skill reads the new rule under the individual class.
+
+### Changed
+
+- The lazy DFA caches behind the regex rules grow from 4 MiB to 8 MiB. The
+  twenty patterns of `SD-Q010` pushed the reverse automaton's minimum past
+  the old bound, which failed the embedded data compile. The cache is an
+  upper bound on memory the automaton may use, and nothing else changes.
+
 ## [0.1.7] - 2026-09-02
 
 ### Added

@@ -366,7 +366,7 @@ fn build() -> Result<Compiled, String> {
             DFA::config()
                 .match_kind(MatchKind::All)
                 .starts_for_each_pattern(true)
-                .cache_capacity(4 * 1024 * 1024),
+                .cache_capacity(8 * 1024 * 1024),
         )
         .syntax(syn)
         .build_many(&rx_pats)
@@ -376,7 +376,7 @@ fn build() -> Result<Compiled, String> {
             DFA::config()
                 .match_kind(MatchKind::All)
                 .starts_for_each_pattern(true)
-                .cache_capacity(4 * 1024 * 1024),
+                .cache_capacity(8 * 1024 * 1024),
         )
         .thompson(thompson::Config::new().reverse(true))
         .syntax(syn)

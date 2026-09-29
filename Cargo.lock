@@ -140,7 +140,7 @@ dependencies = [
 
 [[package]]
 name = "slop-detector"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "aho-corasick",
  "lexopt",

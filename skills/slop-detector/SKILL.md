@@ -189,7 +189,7 @@ first and leaves structure standing.
 - `individual` findings read per hit, like residue. An assistant-voice
   phrase or a chat pleasantry in a received email is quotable evidence. A
   human replying in a live thread can use these sincerely, so weigh whether
-  the artifact has a conversational counterpart. Six rules in this class
+  the artifact has a conversational counterpart. Seven rules in this class
   deserve their own reads:
   - `SD-Q006` ledger-stamp (`ruled 2026-08-14`, `measured 2026-08-01`,
     `the owner rules this on 2026-08-18`): a verdict verb directly against
@@ -209,6 +209,20 @@ first and leaves structure standing.
     same nouns are honest in minutes, contracts, and consent flows, so read
     each hit against the document's purpose. The roleless dated stamp is
     `SD-Q006`.
+  - `SD-Q010` hedging-litotes (`no small feat`, `not without its
+    challenges`, `far from trivial`, `hardly surprising`, `to say the
+    least`, `not uncommon`, `not entirely clear`, `less than ideal`, `not
+    the best`): a claim carried by the negation of its opposite, or a stock
+    understatement standing in for the verdict. One closed set over two
+    shapes. The fixed shapes have no honest reading in confident prose. The
+    measurable shapes can carry a literal count, rate, rank, or evidence
+    gap, so `not uncommon` beside a measured rate and `not the best` beside
+    a ranking are literal statements, and every hit reads against the
+    document's purpose. A run of hits marks prose that hedges by habit.
+    Honest negations stay silent: `not impossible` in a proof, `not
+    unlike` in a comparison, `not incorrect` in a review, `not yet`, `not
+    always`, `not all`, and a bare `far from` or `hardly`. Every adjective
+    is listed, so a hedging negation outside the list stays hand-read.
   - `SLOP-V004` agent-loop vocabulary (`this turn`, `as requested`,
     `point me at`, sentence-initial `Flagged for`): the sentence addresses
     an orchestrator or a drafting loop, and the document that carries it
