@@ -906,33 +906,90 @@ fn q009_dated_possessive_reports_once_with_the_date() {
 #[test]
 fn q009_every_spelling_fires_on_its_span() {
     for (text, span) in [
-        ("The owner ruled that the lexicon drops the bare word.", "The owner ruled that"),
-        ("The maintainer's call was to keep the gate.", "The maintainer's call"),
-        ("This entry was requested by the user.", "requested by the user"),
+        (
+            "The owner ruled that the lexicon drops the bare word.",
+            "The owner ruled that",
+        ),
+        (
+            "The maintainer's call was to keep the gate.",
+            "The maintainer's call",
+        ),
+        (
+            "This entry was requested by the user.",
+            "requested by the user",
+        ),
         ("The owner-flagged stack ships as a rule.", "owner-flagged"),
-        ("Code sign-off is Fable, by owner decision.", "owner decision"),
+        (
+            "Code sign-off is Fable, by owner decision.",
+            "owner decision",
+        ),
         ("Per the owner, the digest stays sealed.", "Per the owner"),
-        ("The flag was added at the user's request.", "at the user's request"),
-        ("On the principal's instruction the run stopped.", "On the principal's instruction"),
-        ("Owner decision (2026-08-20): keep the profile.", "Owner decision (2026-08-20)"),
+        (
+            "The flag was added at the user's request.",
+            "at the user's request",
+        ),
+        (
+            "On the principal's instruction the run stopped.",
+            "On the principal's instruction",
+        ),
+        (
+            "Owner decision (2026-08-20): keep the profile.",
+            "Owner decision (2026-08-20)",
+        ),
         ("- Ruling: keep the profile.", "- Ruling:"),
-        ("Decision, 2026-08-19: the profile stays.", "Decision, 2026-08-19:"),
-        ("Ruled by owner proxy, the rule is candidate tier.", "Ruled by owner proxy"),
-        ("The proxy signed off on 2026-08-20.", "The proxy signed off on 2026-08-20"),
-        ("The owner\u{2019}s verdict was to drop the entry.", "The owner\u{2019}s verdict"),
-        ("The owner ruled this out after the inspection.", "The owner ruled this"),
+        (
+            "Decision, 2026-08-19: the profile stays.",
+            "Decision, 2026-08-19:",
+        ),
+        (
+            "Ruled by owner proxy, the rule is candidate tier.",
+            "Ruled by owner proxy",
+        ),
+        (
+            "The proxy signed off on 2026-08-20.",
+            "The proxy signed off on 2026-08-20",
+        ),
+        (
+            "The owner\u{2019}s verdict was to drop the entry.",
+            "The owner\u{2019}s verdict",
+        ),
+        (
+            "The owner ruled this out after the inspection.",
+            "The owner ruled this",
+        ),
         ("The owner wants the profile kept.", "The owner wants"),
-        ("The orchestrator's call was to stop.", "The orchestrator's call"),
-        ("Owner directive (2026-08-24): stop the run.", "Owner directive (2026-08-24)"),
-        ("The maintainer asked for a smaller patch.", "The maintainer asked"),
+        (
+            "The orchestrator's call was to stop.",
+            "The orchestrator's call",
+        ),
+        (
+            "Owner directive (2026-08-24): stop the run.",
+            "Owner directive (2026-08-24)",
+        ),
+        (
+            "The maintainer asked for a smaller patch.",
+            "The maintainer asked",
+        ),
         ("Per your ruling, the digest stays.", "Per your ruling"),
         ("You ruled that the bare word leaves.", "You ruled"),
-        ("The owner's request was a shorter README.", "The owner's request"),
+        (
+            "The owner's request was a shorter README.",
+            "The owner's request",
+        ),
         ("The lead chose the second option.", "The lead chose"),
         ("Ruling (2026-08-20): keep.", "Ruling (2026-08-20):"),
-        ("Ruled by a Fable agent in the owner's stead.", "the owner's stead"),
-        ("Drafted under owner-proxy Ruling 011.", "owner-proxy Ruling"),
-        ("The owner has ruled on everything current.", "The owner has ruled"),
+        (
+            "Ruled by a Fable agent in the owner's stead.",
+            "the owner's stead",
+        ),
+        (
+            "Drafted under owner-proxy Ruling 011.",
+            "owner-proxy Ruling",
+        ),
+        (
+            "The owner has ruled on everything current.",
+            "The owner has ruled",
+        ),
         ("The owner greenlit the batch.", "The owner greenlit"),
         ("As you directed, the run stopped.", "As you directed"),
     ] {
@@ -1662,55 +1719,166 @@ fn q010_hits(report: &EvidenceReport) -> Vec<&str> {
 #[test]
 fn q010_fixed_shapes_fire_on_their_span() {
     for (text, span) in [
-        ("This is no small feat for a single maintainer.", "no small feat"),
-        ("Migrating the schema was no simple task.", "was no simple task"),
-        ("The rollout is not without its challenges.", "not without its challenges"),
-        ("Debugging the linker is far from trivial.", "far from trivial"),
-        ("It is hardly surprising that the build broke.", "hardly surprising"),
-        ("It's not exactly trivial to reproduce.", "not exactly trivial"),
+        (
+            "This is no small feat for a single maintainer.",
+            "no small feat",
+        ),
+        (
+            "Migrating the schema was no simple task.",
+            "was no simple task",
+        ),
+        (
+            "The rollout is not without its challenges.",
+            "not without its challenges",
+        ),
+        (
+            "Debugging the linker is far from trivial.",
+            "far from trivial",
+        ),
+        (
+            "It is hardly surprising that the build broke.",
+            "hardly surprising",
+        ),
+        (
+            "It's not exactly trivial to reproduce.",
+            "not exactly trivial",
+        ),
         ("The codebase isn't exactly simple.", "isn't exactly simple"),
         ("Getting this to compile is no mean feat.", "no mean feat"),
-        ("The result leaves something to be desired.", "leaves something to be desired"),
-        ("It would not be wrong to say the design is fragile.", "It would not be wrong to say"),
+        (
+            "The result leaves something to be desired.",
+            "leaves something to be desired",
+        ),
+        (
+            "It would not be wrong to say the design is fragile.",
+            "It would not be wrong to say",
+        ),
         ("This is, to put it mildly, a mess.", "to put it mildly"),
-        ("The API surface is not inconsiderable.", "not inconsiderable"),
-        ("Setup is not for the faint of heart.", "not for the faint of heart"),
-        ("The cost was not unimportant to the board.", "not unimportant"),
-        ("The delay proved inconsequential, and the fix was not inconsequential.", "not inconsequential"),
-        ("The team is not unfamiliar with the stack.", "not unfamiliar"),
+        (
+            "The API surface is not inconsiderable.",
+            "not inconsiderable",
+        ),
+        (
+            "Setup is not for the faint of heart.",
+            "not for the faint of heart",
+        ),
+        (
+            "The cost was not unimportant to the board.",
+            "not unimportant",
+        ),
+        (
+            "The delay proved inconsequential, and the fix was not inconsequential.",
+            "not inconsequential",
+        ),
+        (
+            "The team is not unfamiliar with the stack.",
+            "not unfamiliar",
+        ),
         ("Shipping on time is no easy feat.", "no easy feat"),
-        ("A clean build is not a small feat here.", "not a small feat"),
-        ("This is no small achievement for the team.", "no small achievement"),
+        (
+            "A clean build is not a small feat here.",
+            "not a small feat",
+        ),
+        (
+            "This is no small achievement for the team.",
+            "no small achievement",
+        ),
         ("The port is no small undertaking.", "no small undertaking"),
-        ("The win came in no small part from caching.", "in no small part"),
-        ("The gain is due in no small measure to the cache.", "in no small measure"),
+        (
+            "The win came in no small part from caching.",
+            "in no small part",
+        ),
+        (
+            "The gain is due in no small measure to the cache.",
+            "in no small measure",
+        ),
         ("The upgrade remains no easy task.", "remains no easy task"),
-        ("The plan is not without its difficulties.", "not without its difficulties"),
+        (
+            "The plan is not without its difficulties.",
+            "not without its difficulties",
+        ),
         ("The move was not without irony.", "not without irony"),
-        ("The wire protocol is not exactly straightforward.", "not exactly straightforward"),
-        ("The setup wasn\u{2019}t exactly easy.", "wasn\u{2019}t exactly easy"),
+        (
+            "The wire protocol is not exactly straightforward.",
+            "not exactly straightforward",
+        ),
+        (
+            "The setup wasn\u{2019}t exactly easy.",
+            "wasn\u{2019}t exactly easy",
+        ),
         ("The rebase is far from simple.", "far from simple"),
         ("The proof is hardly trivial.", "hardly trivial"),
         ("The throughput was less than stellar.", "less than stellar"),
-        ("The error messages leave much to be desired.", "leave much to be desired"),
-        ("It wouldn't be wrong to say the tests are thin.", "It wouldn't be wrong to say"),
+        (
+            "The error messages leave much to be desired.",
+            "leave much to be desired",
+        ),
+        (
+            "It wouldn't be wrong to say the tests are thin.",
+            "It wouldn't be wrong to say",
+        ),
         ("It is safe to say the cache helped.", "It is safe to say"),
-        ("It's not hard to see why the build broke.", "It's not hard to see"),
-        ("It is not hard to imagine a crash here.", "It is not hard to imagine"),
-        ("The rollout was rough, to say the least.", "to say the least"),
-        ("Parsing a header is not rocket science.", "not rocket science"),
-        ("The migration was not a walk in the park.", "not a walk in the park"),
-        ("The upgrade is not exactly a walk in the park.", "not exactly a walk in the park"),
-        ("The cold path is not to be underestimated.", "not to be underestimated"),
-        ("The edge case is not to be overlooked.", "not to be overlooked"),
-        ("The lock order is not to be taken lightly.", "not to be taken lightly"),
-        ("A 40 percent gain is not to be sneezed at.", "not to be sneezed at"),
-        ("It handles retries, not to mention backoff.", ", not to mention"),
+        (
+            "It's not hard to see why the build broke.",
+            "It's not hard to see",
+        ),
+        (
+            "It is not hard to imagine a crash here.",
+            "It is not hard to imagine",
+        ),
+        (
+            "The rollout was rough, to say the least.",
+            "to say the least",
+        ),
+        (
+            "Parsing a header is not rocket science.",
+            "not rocket science",
+        ),
+        (
+            "The migration was not a walk in the park.",
+            "not a walk in the park",
+        ),
+        (
+            "The upgrade is not exactly a walk in the park.",
+            "not exactly a walk in the park",
+        ),
+        (
+            "The cold path is not to be underestimated.",
+            "not to be underestimated",
+        ),
+        (
+            "The edge case is not to be overlooked.",
+            "not to be overlooked",
+        ),
+        (
+            "The lock order is not to be taken lightly.",
+            "not to be taken lightly",
+        ),
+        (
+            "A 40 percent gain is not to be sneezed at.",
+            "not to be sneezed at",
+        ),
+        (
+            "It handles retries, not to mention backoff.",
+            ", not to mention",
+        ),
         ("This isn't rocket science.", "isn't rocket science"),
-        ("The setup isn't for the faint of heart.", "isn't for the faint of heart"),
-        ("The risk isn't to be underestimated.", "isn't to be underestimated"),
-        ("The rollout wasn't without its challenges.", "wasn't without its challenges"),
-        ("The API surface isn't inconsiderable.", "isn't inconsiderable"),
+        (
+            "The setup isn't for the faint of heart.",
+            "isn't for the faint of heart",
+        ),
+        (
+            "The risk isn't to be underestimated.",
+            "isn't to be underestimated",
+        ),
+        (
+            "The rollout wasn't without its challenges.",
+            "wasn't without its challenges",
+        ),
+        (
+            "The API surface isn't inconsiderable.",
+            "isn't inconsiderable",
+        ),
     ] {
         let report = analyze(text);
         assert_eq!(q010_hits(&report), vec![span], "{text}: {report:?}");
@@ -1723,13 +1891,22 @@ fn q010_fixed_shapes_fire_on_their_span() {
 fn q010_measurable_shapes_fire_on_their_span() {
     for (text, span) in [
         ("It is not uncommon for the cache to miss.", "not uncommon"),
-        ("It is not entirely clear why the test flakes.", "not entirely clear"),
+        (
+            "It is not entirely clear why the test flakes.",
+            "not entirely clear",
+        ),
         ("The current latency is less than ideal.", "less than ideal"),
         ("The design is not without merit.", "not without merit"),
-        ("Porting to ARM is not a trivial undertaking.", "not a trivial undertaking"),
+        (
+            "Porting to ARM is not a trivial undertaking.",
+            "not a trivial undertaking",
+        ),
         ("The benchmark numbers are not the best.", "not the best"),
         ("The load is not insignificant.", "not insignificant"),
-        ("The queue is not quite right after failover.", "not quite right"),
+        (
+            "The queue is not quite right after failover.",
+            "not quite right",
+        ),
         ("The docs are not terribly helpful.", "not terribly"),
         ("A cold start is not unusual on Mondays.", "not unusual"),
         ("A retry is not unreasonable here.", "not unreasonable"),
@@ -1739,20 +1916,50 @@ fn q010_measurable_shapes_fire_on_their_span() {
         ("The team was not unaware of the risk.", "not unaware"),
         ("The patch is not unwelcome.", "not unwelcome"),
         ("The parser is not incapable of recovery.", "not incapable"),
-        ("The metric is not irrelevant to the decision.", "not irrelevant"),
+        (
+            "The metric is not irrelevant to the decision.",
+            "not irrelevant",
+        ),
         ("The ordering is not illogical.", "not illogical"),
-        ("A double free is not unheard of in this module.", "not unheard of"),
-        ("The cache misses not infrequently under load.", "not infrequently"),
-        ("The rename is not a trivial change.", "not a trivial change"),
-        ("Rotation is not an easy task with live traffic.", "not an easy task"),
+        (
+            "A double free is not unheard of in this module.",
+            "not unheard of",
+        ),
+        (
+            "The cache misses not infrequently under load.",
+            "not infrequently",
+        ),
+        (
+            "The rename is not a trivial change.",
+            "not a trivial change",
+        ),
+        (
+            "Rotation is not an easy task with live traffic.",
+            "not an easy task",
+        ),
         ("Recovery is not a simple matter.", "not a simple matter"),
         ("The leak is not a minor issue.", "not a minor issue"),
-        ("The pipeline uses no small amount of memory.", "no small amount"),
+        (
+            "The pipeline uses no small amount of memory.",
+            "no small amount",
+        ),
         ("The rewrite is not without risk.", "not without risk"),
-        ("The change is not without precedent.", "not without precedent"),
-        ("The move is not without its costs.", "not without its costs"),
-        ("The figure is not entirely accurate.", "not entirely accurate"),
-        ("The outcome was not entirely certain.", "not entirely certain"),
+        (
+            "The change is not without precedent.",
+            "not without precedent",
+        ),
+        (
+            "The move is not without its costs.",
+            "not without its costs",
+        ),
+        (
+            "The figure is not entirely accurate.",
+            "not entirely accurate",
+        ),
+        (
+            "The outcome was not entirely certain.",
+            "not entirely certain",
+        ),
         ("The API is not exactly ideal.", "not exactly ideal"),
         ("The cold path is not exactly fast.", "not exactly fast"),
         ("The port is not quite there yet.", "not quite there"),
@@ -1763,10 +1970,16 @@ fn q010_measurable_shapes_fire_on_their_span() {
         ("The migration plan is far from ideal.", "far from ideal"),
         ("The rollback path is far from settled.", "far from settled"),
         ("The layout is less than optimal.", "less than optimal"),
-        ("It is not unreasonable to expect a retry.", "It is not unreasonable to"),
+        (
+            "It is not unreasonable to expect a retry.",
+            "It is not unreasonable to",
+        ),
         ("The fallback is not the worst option.", "not the worst"),
         ("The error handling could be better.", "could be better"),
-        ("There is room for improvement in the parser.", "room for improvement"),
+        (
+            "There is room for improvement in the parser.",
+            "room for improvement",
+        ),
         ("The patch isn't quite right.", "isn't quite right"),
         ("The cause isn't entirely clear.", "isn't entirely clear"),
         ("Timeouts aren't uncommon under load.", "aren't uncommon"),
