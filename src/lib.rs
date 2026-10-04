@@ -5,7 +5,7 @@
 //! spans. It attaches no judgment or score. A coupled agent skill interprets
 //! the report.
 //!
-//! `analyze_bundle` is the multi-document entry point: per-file reports plus
+//! `analyze_bundle` is the multi-document entry point. Per-file reports plus
 //! cross-file verbatim-duplication evidence for a set of related documents
 //! (deck variants, shared report copies). Each per-file report is identical
 //! to what `analyze` returns for that text alone.
@@ -21,8 +21,8 @@ pub use report::{
     Densities, EvidenceReport, Finding, Stats,
 };
 
-/// Snippet cap in bytes. A longer match is cited by its span; the snippet
-/// carries the first cap-aligned bytes.
+/// Snippet cap in bytes. The span cites the full match. A longer match's
+/// snippet carries the first cap-aligned bytes.
 const SNIPPET_CAP: usize = 200;
 
 /// Density floor in words. Below it the per-1k figures are omitted: short
@@ -30,13 +30,13 @@ const SNIPPET_CAP: usize = 200;
 /// number that means nothing.
 const DENSITY_FLOOR_WORDS: usize = 100;
 
-/// Caller-supplied reading context. Nothing here changes what fires; the
+/// Caller-supplied reading context. Nothing here changes what fires. The
 /// options only label findings and shift the residual density figures,
 /// which always print beside the raw ones.
 #[derive(Debug, Clone, Default)]
 pub struct AnalyzeOptions {
     /// Topic-vocabulary allowlist (the CLI's repeatable `--allow-term`):
-    /// per-run, human-supplied context ("this paper is about flourishing"),
+    /// Per-run, human-supplied context (`this paper is about flourishing`),
     /// never shipped data. A finding whose matched text equals a term
     /// (case-insensitive, whole-term) is labeled `topic_term` and leaves
     /// the residual densities while staying in the raw ones.
@@ -47,7 +47,7 @@ pub struct AnalyzeOptions {
 ///
 /// Findings route to the report categories by each rule's `category` field
 /// in `data/inbound/inbound.toml`. Output is deterministic: same input,
-/// byte-identical report. Never panics on any input.
+/// byte-identical report. Processes every input without panicking.
 pub fn analyze(text: &str) -> EvidenceReport {
     analyze_with(text, &AnalyzeOptions::default())
 }
@@ -139,7 +139,7 @@ fn finish_densities(stats: &mut report::Stats) {
 }
 
 /// Analyze a set of related documents: `(path, text)` pairs. Each file gets
-/// its own full `analyze` report; on top of them, one cross-file
+/// its own full `analyze` report. On top of them, one cross-file
 /// duplication pass (the SD-Q005 shingle machinery with the same order,
 /// floor, and cap) reports verbatim runs shared BETWEEN files. Within-file
 /// repeats stay in each file's own SD-Q005 findings and never appear at
@@ -165,13 +165,13 @@ pub fn analyze_bundle_with(docs: &[(String, String)], opts: &AnalyzeOptions) -> 
 }
 
 /// The cross-file pass. All files share one token table and one shingle
-/// map; the segment id bumps at every file boundary, so a run can never
+/// map. The segment id bumps at every file boundary, so a run can never
 /// fuse across two files. Fenced content participates like everything
 /// else and each occurrence carries its container annotation. Grouping
 /// happens BEFORE the emission cap: runs that share an anchor (same
 /// earlier copy, same length) fold into one entry whose occurrences list
 /// the anchor and every later copy in file order, and the cap then keeps
-/// the longest ENTRIES — a passage shared by many files never silently
+/// the longest entries. A passage shared by many files never silently
 /// drops later occurrences.
 fn cross_file_duplication(docs: &[(String, String)]) -> Vec<CrossFileDuplication> {
     let cp = engine::compiled();
@@ -180,12 +180,12 @@ fn cross_file_duplication(docs: &[(String, String)]) -> Vec<CrossFileDuplication
     };
     let mut tokens = duplication::Tokens::new();
     for (file, (_, text)) in docs.iter().enumerate() {
-        // A run never spans a file boundary: one segment per file.
+        // A run never spans a file boundary. One segment per file.
         duplication::tokenize_into(&mut tokens, text, file as u32, file as u32);
     }
     let runs = duplication::find_runs(&tokens, dr.shingle_words, dr.min_run_words, true);
     // Group by anchor: (earlier index, length) identifies one duplicated
-    // text; every later copy is an occurrence of it. Scan order is file
+    // text. Every later copy is an occurrence of it. Scan order is file
     // order, which grouping preserves.
     let mut entries: Vec<((usize, usize), Vec<usize>)> = Vec::new();
     for run in &runs {
@@ -244,7 +244,7 @@ fn cross_file_duplication(docs: &[(String, String)]) -> Vec<CrossFileDuplication
 }
 
 /// Widen a span outward to character boundaries. Every pass emits
-/// boundary-aligned spans already; this is the defensive floor under the
+/// boundary-aligned spans already. This is the defensive floor under the
 /// never-panic contract.
 pub(crate) fn widen_to_char_boundaries(
     src: &str,
@@ -263,7 +263,7 @@ pub(crate) fn widen_to_char_boundaries(
 
 /// The snippet is the source slice at the span, verbatim. A slice over
 /// `SNIPPET_CAP` bytes is capped on a character boundary and flagged
-/// truncated; the span still covers the whole occurrence.
+/// truncated. The span still covers the whole occurrence.
 fn snippet_of(src: &str, span: &std::ops::Range<usize>) -> (String, bool) {
     let slice = &src[span.clone()];
     if slice.len() <= SNIPPET_CAP {

@@ -1,8 +1,8 @@
 //! The guard-prose gate. Every rule in the inbound table carries prose a
 //! reader eventually sees, through the agent skill, and that prose holds to
 //! the same writing standard as the shipped documents. This gate is the
-//! mechanical half of that standard: the classes a reader should never have
-//! to catch by hand.
+//! mechanical half of that standard. It checks punctuation, filler, and
+//! contrast forms in the guard and weight fields.
 //!
 //! Field-scoped on purpose. It reads the prose fields alone, `guard` and
 //! `weight`, and never a pattern, a range, a codepoint list, or a lexicon.
@@ -134,8 +134,8 @@ fn declared_terms(rules: &[Rule]) -> HashSet<String> {
     out
 }
 
-/// Whether `hay[at..at + needle_len]` stands on its own rather than inside a
-/// longer word, so `vital` does not match through `vitally`.
+/// Whether the slice at `at` has word boundaries on both sides. This
+/// prevents `vital` from matching through `vitally`.
 fn standalone(hay: &str, at: usize, len: usize) -> bool {
     let before = hay[..at].chars().next_back();
     let after = hay[at + len..].chars().next();
@@ -247,7 +247,7 @@ fn the_mention_exemption_covers_a_quoted_term_and_never_punctuation() {
 #[test]
 fn the_gate_reads_prose_fields_only() {
     // A regex character class carries semicolons and dashes as data. The
-    // gate never looks at one, so the table's own patterns cannot fail it.
+    // gate reads guard and weight fields, leaving patterns outside its input.
     let rules = load().expect("the embedded table loads");
     let pattern_punctuation = rules
         .iter()

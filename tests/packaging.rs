@@ -1,6 +1,6 @@
 //! Packaging pins. These run against `CARGO_MANIFEST_DIR`, so inside an
-//! unpacked `.crate` they read the published tree and not the repository:
-//! a path that never reached the tarball fails here.
+//! unpacked `.crate` they read the published tree. A path absent from
+//! the tarball fails here.
 
 use std::path::Path;
 

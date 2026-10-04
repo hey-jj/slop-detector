@@ -1,7 +1,8 @@
 # SLOP-T002 transition openers trimmed to the measured trio.
-# The vendored long tail (also, meanwhile, similarly, likewise, indeed,
-# ultimately, interestingly, and peers) is dropped for inbound: human base
-# rate at sentence start is high. Block-start position semantics carry over.
+# The vendored long tail (`also`, `meanwhile`, `similarly`, `likewise`,
+# `indeed`, `ultimately`, `interestingly`, and peers) is dropped for inbound.
+# Its sentence-start human base rate is high.
+# Block-start position semantics carry over.
 moreover
 furthermore
 additionally

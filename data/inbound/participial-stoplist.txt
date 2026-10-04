@@ -1,6 +1,6 @@
-# SD-Q002 participial-opener stop-list. Capitalized -ing words at sentence
-# start that are NOT the instruction-tuned participial-clause pattern.
-# Two groups. Non-participial lookalikes (nouns, pronouns, prepositions):
+# SD-Q002 participial-opener stop-list. These capitalized sentence-start -ing
+# words are exempt from the instruction-tuned clause pattern. Two groups. The
+# first contains nouns, pronouns, and prepositions that resemble participles.
 during
 something
 anything

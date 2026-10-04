@@ -1,6 +1,6 @@
 //! Thin CLI over the library. Reads text from path arguments or stdin and
 //! streams the evidence report as JSON to stdout. One path (or stdin)
-//! produces the single-document report; two or more paths produce the
+//! produces the single-document report. Two or more paths produce the
 //! bundle report, with per-file reports plus cross-file duplication.
 
 use std::io::{self, Read, Write};
@@ -22,7 +22,7 @@ Options:
   -V, --version      print the version";
 
 /// Fail-closed input cap, applied per input. Match-dense inputs produce
-/// reports proportional to their size; the cap bounds worst-case memory
+/// reports proportional to their size. The cap bounds worst-case memory
 /// for the CLI. The library itself takes any `&str`.
 const MAX_INPUT_BYTES: u64 = 4 * 1024 * 1024;
 

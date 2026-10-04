@@ -2,8 +2,8 @@
 //!
 //! The loaded rule table is `data/inbound/inbound.toml`, embedded at build
 //! time together with every lexicon it names. This module parses the table
-//! into typed rules. Every pattern is data; no pattern is hard-coded here or
-//! in the engine.
+//! into typed rules. Every pattern is data. Neither this module nor the
+//! engine hard-codes a pattern.
 
 use serde::Deserialize;
 
@@ -11,7 +11,7 @@ pub const INBOUND_TOML: &str = include_str!("../data/inbound/inbound.toml");
 
 /// Embedded lexicon files, keyed by their package-relative path as written
 /// in `inbound.toml`. Rules carried unchanged from the vendored ai-slop data
-/// reference `words/`; rules carried with edits reference `inbound/`.
+/// reference `words/`. Rules carried with edits reference `inbound/`.
 const LEXICONS: &[(&str, &str)] = &[
     (
         "words/provider-attribution.txt",
@@ -151,9 +151,8 @@ pub enum Mechanism {
     RationaleLeak,
 }
 
-/// Interpretive class annotation for quality rules. Not emitted
-/// in the report: the output carries no tiers, the class map travels to the
-/// skill through this data.
+/// Interpretive class annotation for quality rules. The skill reads the
+/// class map from this data. The report omits this annotation and tiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Class {
@@ -188,7 +187,7 @@ pub enum Boundary {
 }
 
 /// One loaded rule, validated. `terms` holds the parsed lexicon for word-set
-/// rules; `ranges` holds inclusive codepoint ranges for codepoint rules;
+/// rules. `ranges` holds inclusive codepoint ranges for codepoint rules.
 /// `codepoints` and `min_count` serve the positional-space mechanism.
 #[derive(Debug)]
 pub struct Rule {
@@ -205,7 +204,7 @@ pub struct Rule {
     /// Codepoint-rule exemption: a U+FEFF at byte offset 0 is an editor
     /// byte-order mark, not residue, and never fires.
     pub exempt_leading_bom: bool,
-    /// Codepoint-rule exemption: U+FE0E/U+FE0F immediately after a visible
+    /// Codepoint-rule exemption: U+FE0E/U+FE0F directly after a visible
     /// base character is an ordinary presentation selector and never fires.
     pub exempt_presentation_selector: bool,
     /// Codepoint-rule exemption: U+200C/U+200D between two joining-script
@@ -235,7 +234,7 @@ pub struct Rule {
     pub second_person: Vec<String>,
     /// Self-duplication shingle order in words.
     pub shingle_words: usize,
-    /// Self-duplication minimum verified run length in words.
+    /// Minimum self-duplication run length in words after token comparison.
     pub min_run_words: usize,
     /// Self-duplication per-document emission cap, longest runs first.
     pub max_reports: usize,
@@ -281,7 +280,8 @@ pub struct Rule {
     /// it from the loaded table.
     pub guard: String,
     /// The informational weight note, where a rule carries one. Same
-    /// standing as `guard`: prose for a reader, not input to a scan.
+    /// standing as `guard`: it explains the rule to a reader. The scan
+    /// reads the rule's matching fields.
     pub weight: Option<String>,
 }
 
@@ -579,7 +579,7 @@ pub fn load() -> Result<Vec<Rule>, String> {
             .collect();
         // The exemption-window scan advances one byte past each phrase
         // match, which is only boundary-safe when the phrase leads with an
-        // ASCII byte. Every shipped phrase does; hold future data to it.
+        // ASCII byte. Every shipped phrase does. Hold future data to it.
         if let Some(p) = exemptions.iter().find(|p| !exemption_phrase_ok(p)) {
             return Err(format!(
                 "rule {id}: exemption phrase {p:?} must lead with an ASCII character"
@@ -743,7 +743,7 @@ mod tests {
         ];
         let expected: Vec<&str> = residue.iter().chain(quality.iter()).copied().collect();
         assert_eq!(ids, expected);
-        // Omitted or not loaded by design; see the rule guards: SD-R005,
+        // Omitted rules, with reasons in their guards: SD-R005,
         // signature-lines, the mechanical house-style family, dropped
         // empty-qualifiers (I005), the outbound-purpose families
         // (first-person, verification-claims, impact-framing, scrub,
@@ -858,9 +858,9 @@ mod tests {
                 "testament",
             ]
         );
-        // meticulous stays in hype-adjectives (see the SLOP-I003 guard), and
-        // the background register holds the demoted ornamental terms, not
-        // the spike terms.
+        // The `meticulous` forms stay in hype-adjectives (see the SLOP-I003 guard).
+        // The background register holds the demoted ornamental terms.
+        // The spike vocabulary stays in its own lexicon.
         assert!(!terms.iter().any(|t| t.starts_with("meticulous")));
         let i003 = rules.iter().find(|r| r.id == "SLOP-I003").unwrap();
         assert!(i003.terms.contains(&"meticulous".to_string()));
@@ -1068,7 +1068,7 @@ mod tests {
         // The coordinator list serves the imperative test and the subject
         // match alike, so `and it does not ...` reads like `it does not ...`.
         assert_eq!(q007.coordinators, ["and", "or", "but", "yet", "so", "nor"]);
-        // The noun-object negations belong to family 2, not family 1.
+        // The noun-object negations belong to family 2.
         for dropped in ["makes no", "carries no", "has no", "not", "no"] {
             let held = q007
                 .imperative_negations
@@ -1093,7 +1093,7 @@ mod tests {
         assert!(q008.imperative_negations.is_empty());
         assert!(q008.finite_negations.is_empty());
         assert!(q008.markers.contains(&"by design".to_string()));
-        // The rationale-leak anchor is the tool noun alone: no subject set
+        // The rationale-leak anchor is the tool noun alone. No subject set
         // is loaded for it.
         assert!(q008.subjects.is_empty());
         assert!(q008.determiners.is_empty());
@@ -1117,7 +1117,7 @@ mod tests {
         assert_eq!(q005.min_run_words, 10);
         assert_eq!(q005.max_reports, 20);
         assert!(q005.patterns.is_empty());
-        // The params are exclusive to the mechanism: no other rule carries
+        // The params are exclusive to the mechanism. No other rule carries
         // them.
         for r in rules.iter().filter(|r| r.id != "SD-Q005") {
             assert_eq!(r.shingle_words, 0, "{}", r.id);
@@ -1138,13 +1138,13 @@ mod tests {
         ] {
             assert!(v004.terms.contains(&term.to_string()), "{term}");
         }
-        // The construction patterns: Flagged-for is case-sensitive by
-        // design (no (?i) prefix), the all-N-confirmed shape is not.
+        // The `Flagged-for` construction is case-sensitive (no `(?i)`
+        // prefix). The `all-N-confirmed` shape ignores case.
         assert_eq!(v004.patterns.len(), 2);
         assert!(v004.patterns[0].starts_with(r"\bFlagged for"));
         // The refreshed vendored assistant-offers lexicon no longer carries
         // the request-reference phrases (they moved to agent-loop.txt in
-        // ai-slop 0.1.6); that lexicon stays unloaded inbound either way.
+        // ai-slop 0.1.6). That lexicon stays unloaded inbound either way.
         let agent_loop = lexicon("words/agent-loop.txt").unwrap();
         assert_eq!(agent_loop.len(), 10);
         assert_eq!(v004.terms, agent_loop, "loaded unmodified from words/");
@@ -1178,8 +1178,8 @@ mod tests {
             assert!(q003.terms.contains(&term.to_string()), "{term}");
         }
         assert_eq!(q003.patterns.len(), 4);
-        // No scrub rule loads inbound, so the W001 de-dup exemption is
-        // deliberately absent.
+        // The W001 de-dup exemption is absent because no scrub rule
+        // loads inbound.
         assert!(q003.exemptions.is_empty());
     }
 }

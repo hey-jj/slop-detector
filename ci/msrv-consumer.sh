@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # MSRV gate for the declared rust-version (1.85).
 #
-# The shipped Cargo.lock is inert for dependents: a downstream user's cargo
-# resolves the dependency graph fresh from the index. So this gate builds a
-# real external consumer crate that depends on slop-detector by path, with
-# NO lockfile carried over, on a 1.85 toolchain — exactly what a downstream
-# user at the MSRV floor experiences. It then builds slop-detector itself
-# at 1.85 to prove the crate's own code compiles at the declared floor.
+# The shipped Cargo.lock is inert for dependents. Their cargo resolves
+# the graph fresh from the index. This gate builds a real external consumer
+# with a path dependency on slop-detector and no carried lockfile on Rust
+# 1.85. This matches a dependent at the MSRV floor. It then builds the crate
+# itself at 1.85 to prove its code compiles at the declared floor.
 #
 # Run it with a 1.85.x toolchain active (e.g. `rustup run 1.85.0 ci/msrv-consumer.sh`).
 set -euo pipefail
@@ -54,7 +53,7 @@ fn main() {
 }
 RS
 
-# Deliberately no lockfile in $CONSUMER: cargo resolves fresh from the index,
+# $CONSUMER starts without a lockfile, so cargo resolves from the index,
 # as any dependent would. A transitive dep whose current version needs >1.85
 # fails this build even though slop-detector's own pinned lockfile builds fine.
 echo "== external consumer: fresh-resolution build at 1.85 =="

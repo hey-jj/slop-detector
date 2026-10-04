@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.9] - 2026-10-03
+
+### Documentation
+
+- Rewrite rustdoc, code comments, and the manually synced skill rule
+  reference in the house style for shipped prose.
+
+### Changed
+
+- Reword rule guard text in the inbound data. Matching patterns
+  are unchanged.
+
 ## [0.1.8] - 2026-09-29
 
 ### Added

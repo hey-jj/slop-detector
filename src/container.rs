@@ -1,10 +1,10 @@
-//! Container pre-classification: one linear pre-pass over the raw source
-//! that labels where each finding sits, so the reading agent can discount
-//! quoted or fenced material without hand work. Annotation only, never
-//! suppression: classification changes no finding, only its `container`
-//! label, so a misread by these deliberately crude heuristics costs a
-//! label, not a finding. slop-detector has no markdown segmentation; these
-//! span sets are heuristics over raw bytes and the skill says so.
+//! A linear container-label pre-pass runs once per document. It labels
+//! findings from quoted or fenced material so the reader can weigh them
+//! separately.
+//! Classification changes only the `container` label. These heuristics
+//! operate on raw bytes, so a misclassification leaves the finding intact.
+//! slop-detector has no markdown segmentation. The skill states that
+//! these span sets use crude heuristics.
 
 use crate::report::Container;
 use std::ops::Range;
@@ -21,7 +21,7 @@ pub(crate) struct Containers {
 }
 
 /// Fenced-code regions: a line whose trimmed content starts with three
-/// backticks toggles fence state; the region covers both marker lines. An
+/// backticks toggles fence state. The region covers both marker lines. An
 /// unclosed fence runs to the end of the text. Annotation only: SD-Q005
 /// tokenizes fenced content like every other rule, and a duplicated run
 /// inside a fence carries this label instead of being skipped.
@@ -99,7 +99,7 @@ impl Containers {
         let mut quoted = Vec::new();
         // Quoted spans: straight and curly double quotes only, tracked
         // independently. State resets at blank lines so an unbalanced
-        // quote cannot poison the rest of the document; an open span
+        // quote cannot poison the rest of the document. An open span
         // discarded at a blank line is simply not recorded.
         let mut open_straight: Option<usize> = None;
         let mut open_curly: Option<usize> = None;
@@ -141,7 +141,7 @@ impl Containers {
         // overlap ("outer \u{201C}inner\u{201D} tail"). `classify`'s binary
         // search requires each list sorted and non-overlapping: normalize
         // by sorting and merging. The merged union covers exactly the
-        // positions inside at least one closed quote pair — no
+        // positions inside at least one closed quote pair. No
         // prose-only position gains the label, and a position the raw
         // list would misclassify as prose (inside the outer pair, before
         // the inner one) regains it.
@@ -163,7 +163,7 @@ impl Containers {
 
     /// Classify the position `at` (a finding's span start). Precedence when
     /// sets overlap: fenced-code, then blockquote, then quoted, then
-    /// heading; everything else is prose.
+    /// heading. Everything else is prose.
     pub(crate) fn classify(&self, at: usize) -> Container {
         if covers(&self.fenced, at) {
             Container::FencedCode
@@ -221,10 +221,10 @@ mod tests {
     }
 
     /// Nested and interleaved straight/curly pairs produce overlapping,
-    /// out-of-order raw spans; after normalization the quoted list must
-    /// stay sorted and non-overlapping, classify never panics, positions
-    /// inside the outer pair (including before the inner one) are Quoted,
-    /// and prose outside every pair stays Prose.
+    /// out-of-order raw spans. After normalization the quoted list must stay
+    /// sorted and non-overlapping. Classification handles every input without
+    /// panicking. Positions inside the outer pair, including before the inner
+    /// one, are Quoted. Prose outside every pair stays Prose.
     #[test]
     fn nested_and_interleaved_quotes_classify_safely() {
         let src = "He said \"we delve into \u{201C}nested\u{201D} data\" today.\n\

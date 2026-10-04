@@ -11,9 +11,9 @@ fn opts(terms: &[&str]) -> AnalyzeOptions {
     }
 }
 
-/// A finding inside a fenced block still reports — slop-detector has no
-/// segmentation — and carries the fenced-code label so the reader can
-/// discount it without hand work.
+/// A finding inside a fenced block reports with the fenced-code label.
+/// The scan reads raw text without segmentation.
+/// The label lets the reader weigh fenced content separately.
 #[test]
 fn fenced_finding_reports_with_annotation() {
     let text = "Plain prose sits here.\n\n```\nWe delve into the config.\n```\n";
@@ -24,7 +24,7 @@ fn fenced_finding_reports_with_annotation() {
         .find(|f| f.rule_id == "SLOP-A001")
         .expect("delve inside a fence must still report");
     assert_eq!(hit.container, Container::FencedCode);
-    // Raw counts keep it; residual (prose-only) excludes it. Below the
+    // Raw counts keep it. Residual (prose-only) excludes it. Below the
     // 100-word floor no rate is computed, but the counts stand.
     let d = report.stats.densities;
     assert_eq!(d.spike.hits, 1);
@@ -58,9 +58,9 @@ fn containers_classify_blockquote_quoted_heading_and_prose() {
     assert_eq!(d.spike.residual_hits, 1, "only the prose hit is residual");
 }
 
-/// The A005 quotation divergence from ai-slop, pinned: ai-slop suppresses
-/// quoted metaphor-reach idioms entirely; slop-detector has no quotation
-/// suppression, so the quoted idiom reports WITH its container label.
+/// ai-slop suppresses quoted A005 metaphor-reach idioms entirely.
+/// slop-detector reports the quoted idiom with its container label.
+/// It has no quotation suppression.
 #[test]
 fn quoted_metaphor_reach_reports_with_container_label() {
     let text = "Prose line one sits here.\n\n> The paper weaves together two traditions.\n";
@@ -74,7 +74,7 @@ fn quoted_metaphor_reach_reports_with_container_label() {
 }
 
 /// `--allow-term` labels a finding whose matched text equals the term,
-/// case-insensitively; it never removes the finding, and only the residual
+/// case-insensitively. It never removes the finding, and only the residual
 /// figures move.
 #[test]
 fn allow_term_labels_without_suppressing() {
@@ -93,7 +93,7 @@ fn allow_term_labels_without_suppressing() {
         !plain.quality_patterns.iter().any(|f| f.topic_term),
         "no label without the flag"
     );
-    // Raw density keeps the hit; residual drops it.
+    // Raw density keeps the hit. Residual drops it.
     assert_eq!(labeled.stats.densities.spike.hits, 1);
     assert_eq!(labeled.stats.densities.spike.residual_hits, 0);
     assert_eq!(plain.stats.densities.spike.residual_hits, 1);
@@ -102,8 +102,8 @@ fn allow_term_labels_without_suppressing() {
     assert!(!unrelated.quality_patterns.iter().any(|f| f.topic_term));
 }
 
-/// Whole-term equality: an allow-term must equal the matched text, not
-/// merely appear inside it.
+/// An allow-term must equal the whole matched text. A substring leaves
+/// the finding outside the topic vocabulary.
 #[test]
 fn allow_term_is_whole_term_equality() {
     let text = "We leverage the platform daily.";

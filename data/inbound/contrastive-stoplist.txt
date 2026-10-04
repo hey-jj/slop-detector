@@ -1,10 +1,10 @@
 # SD-Q004 imperative-opener deny-list, base forms. A clause whose first
-# word is on this list, or whose interior ", <word>" or "then <word>"
+# word is on this list, or whose interior `, <word>` or `then <word>`
 # position carries one, reads as a directive and suppresses the
-# contrastive-tail scan. Same list as ai-slop's SLOP-C007
-# imperative_openers param. Known homograph cost, accepted: a declarative
-# clause opening with a listed verb form ("Set operations return unions,
-# not lists.") is wrongly suppressed. Every doubt resolves to silence.
+# contrastive-tail scan. The list matches ai-slop's SLOP-C007
+# imperative_openers parameter. A declarative clause can open with a
+# listed verb and be wrongly suppressed (`Set operations return unions,
+# not lists.`). Every doubt resolves to silence.
 do
 don't
 never

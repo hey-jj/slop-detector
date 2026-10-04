@@ -1,33 +1,29 @@
 //! SD-Q005 verbatim self-duplication and the bundle-mode cross-file scan.
-//! Ported from ai-slop's SLOP-U001 duplication engine, memory-frugal form:
-//! byte-range tokens over ONE shared fold buffer (no owned String per
-//! word), a `HashMap<u64, usize>` of first-seen shingle heads with an
-//! intrusive per-token `next` chain (no heap Vec per distinct shingle), and
-//! exact token comparison verifying every hash revisit — so determinism
-//! never depends on hash values and the matcher itself cannot
-//! false-positive: every emitted run is a true verbatim repeat of at least
-//! `min_run_words` words.
+//! The scan derives from ai-slop's SLOP-U001 duplication engine.
+//! Byte-range tokens share one fold buffer. A `HashMap<u64, usize>` holds
+//! the latest shingle heads, linked through one `next` slot per token.
+//! Each word has no owned String, and each distinct shingle has no heap Vec.
+//! Exact token comparison checks every hash revisit, so collisions cannot
+//! produce a finding. Determinism never depends on hash values.
+//! Each emitted run is a true verbatim repeat of at least `min_run_words`
+//! words. The tokenizer uses shared storage for words and shingle chains.
 //!
-//! slop-detector scans raw bytes with no prose/code segmentation: fenced
-//! and quoted material tokenizes like everything else, and a duplicated
-//! run inside a fence reports with its `container = fenced-code`
-//! annotation — annotate, never skip. The only segment boundary is the
-//! genuine one: the file boundary in bundle mode (the caller bumps `seg`
-//! between files), so a run never fuses across two files.
+//! Fenced and quoted content participates in the scan and retains its
+//! container annotation. The scan reads raw bytes with no prose/code
+//! segmentation. The file boundary is its only segment boundary.
+//! The caller increments `seg` between bundle files,
+//! which prevents a run from spanning a file boundary.
 //!
-//! The scan chains EVERY processed anchor (not just the first carrier of a
-//! hash) and, on a hash revisit, walks up to `WALK_CAP` chain entries,
-//! extends each verified candidate forward AND backward, and keeps the
-//! candidate with the maximal TOTAL run — an early prefix-sharing decoy
-//! that diverges below the floor cannot displace the genuine duplicate
-//! between later copies. Recall is bounded, not absolute: more than
-//! `WALK_CAP` same-prefix occurrences sitting between a genuine pair can
-//! exhaust the walk before the true partner is reached and mask it (an
-//! attacker-unrealistic shape — a document already carrying 32+ copies of
-//! one 8-word prefix is its own finding). The scan advances past every
-//! emitted run, so the whole pass stays near-linear (O(WALK_CAP * tokens)
-//! bounded work, never O(N^2)) with memory proportional to the token
-//! count.
+//! Every processed anchor joins its hash chain. A revisit walks up to
+//! `WALK_CAP` entries, checks token equality, extends each eligible run
+//! forward and backward, and keeps the longest total run. An early copy
+//! that shares the prefix but diverges below the floor leaves later copies
+//! available for comparison. More than `WALK_CAP` same-prefix occurrences
+//! between two copies can exhaust the walk and hide their shared run.
+//! This shape is unrealistic for an attack. A document carrying 32+ copies
+//! of one 8-word prefix is already its own finding.
+//! The scan advances past each emitted run. O(WALK_CAP * tokens) bounds
+//! its work. Memory stays proportional to the token count.
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -43,9 +39,9 @@ pub(crate) struct Tok {
     /// words, so no per-word length needs storing.
     word: usize,
     /// File segment id: a shingle or run never spans two segments. Bumped
-    /// by the caller between bundle files; constant within one document.
+    /// by the caller between bundle files. Constant within one document.
     seg: u32,
-    /// Bundle file index; 0 for the single-document scan.
+    /// Bundle file index. 0 for the single-document scan.
     pub file: u32,
 }
 
@@ -82,7 +78,7 @@ impl Tokens {
 }
 
 /// Append the lowercased word tokens of `text` (alphanumeric plus
-/// apostrophe, typographic apostrophe folded — the `first_token` charset
+/// apostrophe, typographic apostrophe folded, using the `first_token` charset
 /// from the contrastive-tail scan). Every byte tokenizes, fenced content
 /// included: SD-Q005 sees the same raw bytes as every other rule, and the
 /// container pre-pass annotates what lands inside a fence. The caller
@@ -125,9 +121,8 @@ pub(crate) fn tokenize_into(tokens: &mut Tokens, text: &str, file: u32, seg: u32
 }
 
 fn shingle_hash(tokens: &Tokens, i: usize, k: usize) -> u64 {
-    // Fixed-key SipHash: deterministic across runs and processes. Output
-    // correctness does not depend on it — collisions are resolved by the
-    // exact token comparison in the scan.
+    // Fixed-key SipHash repeats across runs and processes. The scan
+    // resolves collisions through exact token comparison.
     let mut h = std::collections::hash_map::DefaultHasher::new();
     for d in 0..k {
         tokens.word(i + d).hash(&mut h);
@@ -135,18 +130,19 @@ fn shingle_hash(tokens: &Tokens, i: usize, k: usize) -> u64 {
     h.finish()
 }
 
-/// One verified maximal run: token indices of the earlier copy, the later
-/// copy, and the shared length in words.
+/// A maximal run after exact token comparison. Holds the token indices of
+/// the earlier copy, the later copy, and their shared length in words.
 pub(crate) struct Run {
     pub earlier: usize,
     pub later: usize,
     pub len: usize,
 }
 
-/// The shared shingle scan. `cross_file_only` is the bundle mode: verified
-/// same-file revisits are skipped (each file's own SD-Q005 pass owns
-/// them), and the same-file disjointness guard is replaced by the segment
-/// discipline, since copies in different files cannot overlap.
+/// The shared shingle scan. With `cross_file_only`, the scan skips
+/// same-file revisits because each file's SD-Q005 pass handles them.
+/// Segment boundaries separate copies from different files, which
+/// cannot overlap. In this mode segment discipline replaces the
+/// same-file disjointness guard.
 pub(crate) fn find_runs(
     tokens: &Tokens,
     k: usize,
@@ -158,26 +154,23 @@ pub(crate) fn find_runs(
     if k == 0 || toks.len() < k {
         return runs;
     }
-    // Shingle hash -> most-recent token index carrying that hash, with
-    // earlier carriers chained through `next` (an intrusive singly linked
-    // list: each token index sits in at most one chain, so one
-    // preallocated slot per token suffices). EVERY processed anchor joins
-    // its chain, verified or not: keeping only one representative per
-    // distinct sequence is the prefix-decoy hole — an early occurrence
-    // that shares the k-word prefix but diverges below the floor would
-    // hold the slot and block the genuine duplicate between later copies.
-    // A revisit therefore walks the chain (most recent first, capped at
-    // `WALK_CAP` entries) and keeps the MAXIMAL verified eligible run, so
-    // occ2-vs-occ3 and occ1-vs-occ3-across-a-decoy both land. The cap
-    // trades absolute recall for the near-linear bound: more than
-    // `WALK_CAP` same-prefix occurrences between a genuine pair can
-    // exhaust the walk before the true partner and mask it —
-    // attacker-unrealistic, since 32+ copies of one 8-word prefix are
-    // already the loudest thing in the document. The cap bounds the walk
-    // on a phrase repeated N times: sub-floor candidates cost under
-    // `floor` comparisons each way, and a candidate at or above the floor
-    // emits and advances `i` past the run, so total work stays
-    // O(WALK_CAP * tokens) — near-linear, never O(N^2).
+    // Each hash points to its latest anchor. Earlier anchors form an
+    // intrusive chain through one preallocated slot per token. Every
+    // processed anchor joins the chain, so an early prefix-sharing copy
+    // that diverges below the floor leaves later repeats available.
+    // Walk at most WALK_CAP entries, most recent first, and keep the
+    // longest eligible run after exact token comparison. More same-prefix
+    // occurrences can exhaust the walk before the matching copy.
+    // Sub-floor candidates use fewer than floor comparisons each way.
+    // An emitted run advances the scan past its end, bounding total work by
+    // O(WALK_CAP * tokens), near-linear and never O(N^2).
+    // Each token index sits in at most one chain. Every processed anchor
+    // joins whether exact token comparison succeeds or fails.
+    // Both occ2-vs-occ3 and occ1-vs-occ3 across a
+    // decoy can match. More than WALK_CAP same-prefix occurrences between
+    // a genuine pair can mask it. That shape is unrealistic for an attacker,
+    // because 32+ copies of one 8-word prefix are already the loudest thing in
+    // the document.
     const WALK_CAP: usize = 32;
     const NIL: usize = usize::MAX;
     let mut heads: HashMap<u64, usize> = HashMap::new();
@@ -194,25 +187,18 @@ pub(crate) fn find_runs(
                 i += 1;
             }
             Entry::Occupied(mut o) => {
-                // Walk the chain, most recent first. Eligibility per mode:
-                // the bundle scan pairs cross-file copies only (each
-                // file's own SD-Q005 pass owns same-file repeats), and the
-                // single-document scan requires disjoint copies — an
-                // anchor overlapping its own revisit ("the the the") is
-                // repetition inside one passage, not a duplicated passage.
-                // A hash collision fails `shingles_eq` and is skipped the
-                // same way. Every verified candidate is extended forward
-                // AND backward before ranking, so candidates compete on
-                // their TOTAL run — ranking on forward length alone would
-                // let a candidate that extends far forward beat one whose
-                // run reaches further backward, reporting a non-maximal
-                // run. Length ties keep the LAST candidate walked: the
-                // chain is strictly decreasing in position, so
-                // equal-length copies anchor on the EARLIEST occurrence —
-                // a deliberate divergence from ai-slop's most-recent tie,
-                // so that every later copy of one passage shares one
-                // anchor and bundle grouping folds them into one entry.
-                // `best` holds (earlier start, later start, total len).
+                // Bundle mode pairs copies from different files. The
+                // single-document scan requires disjoint copies, because
+                // overlapping anchors can describe one repeated stem.
+                // Exact shingle comparison rejects hash collisions.
+                // Extend each eligible run forward and backward before
+                // ranking by total length. Forward length alone can favor
+                // a shorter run whose anchor sits nearer its beginning.
+                // Length ties keep the last candidate walked. The chain
+                // decreases in position, so ties choose the earliest copy.
+                // ai-slop keeps the most recent copy on a length tie.
+                // Later copies here share the earliest anchor for bundle grouping.
+                // best holds (earlier start, later start, total len).
                 let mut best: Option<(usize, usize, usize)> = None;
                 let mut e = *o.get();
                 let mut walked = 0usize;
@@ -240,13 +226,13 @@ pub(crate) fn find_runs(
                         // anchor window can sit one or more words into the
                         // real run when the run-initial windows lost their
                         // capped walks to decoy crowds on earlier passes.
-                        // Same guards mirrored — same-file copies stay
+                        // The same guards apply. Same-file copies stay
                         // disjoint (the earlier copy's end `es + len` is
                         // pinned while the later start `s` moves left, so
                         // the gap must stay positive) and neither side
-                        // crosses a file segment. Backward work per
-                        // candidate is bounded by the run length, so the
-                        // pass keeps its O(WALK_CAP * tokens) bound.
+                        // crosses a file segment. The run length bounds each
+                        // candidate's backward work, so the pass keeps its
+                        // O(WALK_CAP * tokens) bound.
                         let (mut es, mut s, mut len) = (e, i, len);
                         while es > 0
                             && (!same_file || es + len < s)
@@ -279,7 +265,7 @@ pub(crate) fn find_runs(
                             later: s,
                             len,
                         });
-                        // Advance past the repeated run: sub-runs of an
+                        // Advance past the repeated run. Sub-runs of an
                         // emitted run are not separate findings. `s + len`
                         // is the anchor plus the winner's forward-extended
                         // length (backward steps move `s` left exactly as

@@ -26,7 +26,7 @@ pub struct Hit {
 struct RxMeta {
     rule: usize,
     /// The pattern begins/ends with `\b`. The DFA matched the ASCII
-    /// `(?-u:\b)` prefilter form; the edge is re-validated against the real
+    /// `(?-u:\b)` prefilter form. The edge is re-validated against the real
     /// Unicode word-boundary rule before the hit is accepted.
     bound_start: bool,
     bound_end: bool,
@@ -158,7 +158,7 @@ pub(crate) struct DuplicationRule {
 }
 
 /// One compiled contrastive-tail rule: the imperative-opener deny-list and
-/// second-person cues are lowercased at load; `max_np` caps the noun phrase
+/// second-person cues are lowercased at load. `max_np` caps the noun phrase
 /// in bytes and `window` caps the clause walk-back in bytes.
 pub(crate) struct ContrastiveRule {
     rule: usize,
@@ -171,8 +171,9 @@ pub(crate) struct ContrastiveRule {
 static COMPILED: OnceLock<Result<Compiled, String>> = OnceLock::new();
 
 /// The compiled engine. The rule table and lexicons are embedded at build
-/// time, so a load or compile failure is a defect in the shipped data, not a
-/// property of any input; `data_compiles` in the test suite guards it.
+/// time. A load or compile failure identifies a defect in the shipped
+/// data. Input text cannot cause that failure. The `data_compiles` test
+/// checks the table.
 pub fn compiled() -> &'static Compiled {
     COMPILED
         .get_or_init(build)
@@ -181,7 +182,7 @@ pub fn compiled() -> &'static Compiled {
 }
 
 /// Rewrite a pattern into DFA-compatible form. Pattern-edge `\b` becomes an
-/// ASCII prefilter re-validated in `scan_rx`; look-arounds are unsupported.
+/// ASCII prefilter re-validated in `scan_rx`. Look-arounds are unsupported.
 fn rewrite_pattern(p: &str) -> Result<(String, bool, bool), String> {
     if p.contains("(?<") || p.contains("(?!") || p.contains("(?=") {
         return Err(format!("unsupported look-around in pattern {p}"));
@@ -193,7 +194,7 @@ fn rewrite_pattern(p: &str) -> Result<(String, bool, bool), String> {
 
 /// Validate a rewritten pattern against the locked bounded-width policy and
 /// return its maximum match width in bytes. The overlapping adapter recovers
-/// each match start with a reverse search; an unbounded-width pattern makes
+/// each match start with a reverse search. An unbounded-width pattern makes
 /// that window the whole region and the scan quadratic, so every
 /// unbounded-width quantifier (`*`, `+`, `{n,}`) is rejected at build,
 /// whitespace included.
@@ -237,8 +238,8 @@ fn build() -> Result<Compiled, String> {
     let mut rationale_rules: Vec<RationaleRule> = Vec::new();
 
     for (idx, rule) in rules.iter().enumerate() {
-        // Every text rule's `patterns` ride the shared regex pass; the data
-        // loader guarantees non-text mechanisms carry none.
+        // The data loader rejects patterns on non-text mechanisms, so
+        // this pass compiles patterns from text rules only.
         for p in &rule.patterns {
             let (pat, bs, be) = rewrite_pattern(p)?;
             let max_width = validate_bounded_width(&pat)?;
@@ -468,9 +469,9 @@ fn pictographic(c: char) -> bool {
 
 /// The list markers a writer may put in front of the first word. The four
 /// bullet glyphs also appear in `LEADING_DECORATION`, because ai-slop and
-/// unslop hold one combined set while this tree splits the roles: its marker
-/// arm carries the ASCII list openers too. Both roles skip, so the overlap
-/// changes nothing.
+/// unslop use one combined set. This tree splits markers from decoration.
+/// Its marker arm also carries the ASCII list openers. Both sets skip
+/// characters, so their overlap leaves the result unchanged.
 ///
 /// Fleet-wide set, fixed by F-R14a and F-R14e. Edit this list and
 /// `LEADING_DECORATION` together, and in all three repos.
@@ -478,24 +479,23 @@ fn pictographic(c: char) -> bool {
 /// Measured over 3.08M lines of the fleet corpus: U+2022 appears 205 times,
 /// 136 of them line-leading. U+2023, U+2043, and U+2219 have a combined
 /// population of one, which every corpus available to the fleet reads as
-/// indistinguishable from zero. They are carried on cost asymmetry and on
-/// the completeness of the set, never on measured need. The asymmetry is
-/// one-directional: widening a skip set turns silences into findings and
-/// never the reverse, though a finding it creates can still be wrong and
-/// still goes to the reader. U+00B7 is deliberately absent, on 2,341
+/// indistinguishable from zero. They stay on cost asymmetry and set
+/// completeness. The inclusion criteria exclude measured need. Adding a
+/// skipped character can expose a word behind it and create a finding.
+/// Widening the skip set preserves existing findings. New findings can
+/// still be false positives, and the reader weighs each one. U+00B7 is excluded after 2,341
 /// occurrences with only 184 line-leading: the middle dot is an inline
 /// separator and a letter in Catalan, so a word behind one opens nothing.
 const LEADING_MARKERS: [char; 9] = [
     '-', '*', '+', '>', '#', '\u{2022}', '\u{2023}', '\u{2043}', '\u{2219}',
 ];
 
-/// What a writer may put in front of the first word as decoration, as
-/// inclusive codepoint ranges. A single codepoint is written as a range onto
-/// itself so the table reads one way throughout.
+/// Leading decoration characters, listed as inclusive codepoint ranges.
+/// A single codepoint uses a range whose endpoints are equal.
 ///
-/// Fleet-wide set, fixed by F-R14a and F-R14e, and the same codepoints
-/// `is_leading_decoration` carries in ai-slop and unslop. The order below
-/// follows theirs so the three lists diff cleanly. Edit this list and
+/// F-R14a and F-R14e fix this fleet-wide decoration set. It matches
+/// `is_leading_decoration` in ai-slop and unslop. The order follows those
+/// lists so their differences remain visible. Edit this list and
 /// `LEADING_MARKERS` together, and in all three repos.
 ///
 /// The Geometric Shapes block is what the measurement turned on: the nested
@@ -549,7 +549,7 @@ fn is_leading_decoration(c: char) -> bool {
 /// The ordered-list marker ending at `punct`, which holds a `.` or a `)`.
 /// Returns the offset of the first digit when the run is a list marker,
 /// meaning a digit run that opens its line behind nothing but whitespace.
-/// A digit run following other text on the line is not a marker: in
+/// A digit run following other text on the line is not a marker. In
 /// `See item 3. Moreover` the `3` sits behind `item`, so the `.` is doing
 /// its ordinary work of ending a sentence.
 fn ordered_marker(src: &str, punct: usize) -> Option<usize> {
@@ -610,9 +610,8 @@ fn at_block_start(src: &str, at: usize) -> bool {
 
 /// True when the hit is fully contained in one of the rule's exemption
 /// phrases, checked case-insensitively in a window around the span
-/// (ai-slop's `exempted`). Lowercasing can change byte lengths for
-/// non-ASCII, so the match position is recomputed by lowercasing the
-/// prefix.
+/// (ai-slop's `exempted`). Lowercasing can change non-ASCII byte lengths.
+/// Lowercasing the prefix gives the match position in the folded text.
 fn exempted(hay: &str, span: &Range<usize>, phrases: &[String]) -> bool {
     if phrases.is_empty() {
         return false;
@@ -639,8 +638,8 @@ fn exempted(hay: &str, span: &Range<usize>, phrases: &[String]) -> bool {
 }
 
 /// Pass 1: both Aho-Corasick automatons over the source bytes. Overlapping
-/// standard matching; leftmost kinds silently drop nested entries and are
-/// prohibited. The source is never lowercased: case-insensitivity lives in
+/// standard matching. Leftmost kinds silently drop nested entries and are
+/// prohibited. The source is never lowercased. Case-insensitivity lives in
 /// the automaton, so offsets stay in source coordinates.
 fn scan_ac(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     let passes: [(&AhoCorasick, &[usize]); 2] =
@@ -778,22 +777,22 @@ fn contains_word(hay_lower: &str, needle: &str) -> bool {
     false
 }
 
-/// Bounded terminal test for a `.` met during the NP scan or the clause
-/// walk-back, ported from ai-slop's SLOP-C007 fix. `dot_end` is the offset
-/// just past the `.` in `text`. A period followed directly by an
-/// alphanumeric character is abbreviation- or number-internal (`U.S`,
-/// `3.5`): not a terminal. A period followed by a bounded ASCII space/tab
-/// run and then a lowercase continuation is mid-sentence punctuation
-/// (`U.S. but`, `e.g. the`): not a terminal. Everything else — end of
-/// text, a line break, an uppercase/digit/quote/bracket follower, a
-/// whitespace run past the parser's 8-unit bound — is a terminal, exactly
-/// as before this test existed. The peek is O(1) and bounded. Accepted
-/// false negatives, mirrored from ai-slop's KNOWN-EDGES: chat-style prose
-/// that starts sentences lowercase reads a real terminal as a
-/// continuation and stays silent, and an abbreviation followed by a
-/// capitalized word (`Mr. Smith`) still reads as a terminal — both
-/// resolve toward silence or the pre-existing behavior, never toward a
-/// new firing surface.
+/// This terminal test derives from ai-slop's SLOP-C007 fix.
+/// Test a period during the NP scan or clause walk-back. `dot_end` is the
+/// offset just past the period. A following alphanumeric character keeps
+/// it inside an abbreviation or number. After up to eight ASCII spaces or
+/// tabs, a lowercase continuation also keeps it inside the sentence.
+/// End of text, a line break, an uppercase letter, a digit, a quote, a
+/// bracket, or a longer whitespace run makes it terminal. The peek is O(1).
+/// Examples inside abbreviations or numbers are `U.S` and `3.5`.
+/// Lowercase continuations include `U.S. but` and `e.g. the`.
+/// The whitespace bound is the parser's 8-unit bound. Everything else
+/// remains terminal, as before this test existed. The peek is bounded.
+/// ai-slop's KNOWN-EDGES lists both accepted false negatives. Chat-style
+/// prose that starts sentences lowercase can miss a real terminal.
+/// An abbreviation before a capitalized word (`Mr. Smith`) still reads
+/// as terminal. Both resolve to silence or the prior behavior. Neither
+/// creates a new firing surface.
 fn period_is_terminal(text: &str, dot_end: usize) -> bool {
     let mut chars = text[dot_end..].chars();
     let Some(first) = chars.next() else {
@@ -803,7 +802,7 @@ fn period_is_terminal(text: &str, dot_end: usize) -> bool {
         return false; // abbreviation- or number-internal
     }
     if first != ' ' && first != '\t' {
-        // Line breaks end the block; quotes, brackets, and punctuation all
+        // Line breaks end the block. Quotes, brackets, and punctuation all
         // sit on the terminal side.
         return true;
     }
@@ -836,19 +835,18 @@ fn period_is_terminal(text: &str, dot_end: usize) -> bool {
 /// legal NP content. Returns the exclusive end offset of the terminal
 /// punctuation. The no-interior-comma constraint is what keeps the
 /// parenthetical `X, not Y, verb ...` interpolation out of scope, and a
-/// word-bounded `but` anywhere in the NP rejects the tail outright: a
+/// word-bounded `but` anywhere in the NP rejects the tail outright. A
 /// contrastive continuation (`, not in the U.S. but in Asia.`) is the
-/// not-X-but-Y pair form — SLOP-C008's territory and a legitimate
-/// contrast — never a bare apophatic caveat.
-/// Both whitespace loops match ASCII whitespace only (space/tab/LF/CR), by
-/// design, mirroring ai-slop's SLOP-C007: a non-ASCII space inside a
-/// contrastive tail is an accepted false negative.
+/// contrastive pair form handled by SLOP-C008.
+/// Both whitespace loops match ASCII space, tab, LF, and CR only, matching
+/// ai-slop's SLOP-C007. A non-ASCII space inside a tail is an accepted
+/// false negative. The SLOP-C008 pair is a legitimate contrast.
 ///
 /// Words ending in `-ing` that the participial exemption never covers: the
 /// four quantifier pronouns, which are ordinary NP heads, and the preposition
 /// `during`, which opens one. Denying `during` the exemption is what keeps
 /// the participle test honest, and whether `, not during matching.` should
-/// fire at all is a question about the rule's scope, not about this list.
+/// fire at all is a separate question about the rule's scope.
 const NOT_A_PARTICIPLE: [&str; 5] = ["nothing", "anything", "something", "everything", "during"];
 
 fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
@@ -862,8 +860,8 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
         }
     }
     let after_ws = &rest[i..];
-    // `get` rather than direct slicing: the byte at the cut can sit inside a
-    // multi-byte character, and a directly sliced prefix would panic there.
+    // get returns None if the cut falls inside a multibyte character.
+    // Direct slicing would panic at that cut.
     let kw_len = if after_ws
         .get(..5)
         .is_some_and(|s| s.eq_ignore_ascii_case("never"))
@@ -892,9 +890,9 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
     if ws == 0 {
         return None;
     }
-    // A participial adjunct is not a contrastive tail: `never judging anyone`
-    // says how she listened, not what she did instead. The exemption is
-    // narrow. The negation has to be immediately followed by the `-ing` word,
+    // The participial adjunct `never judging anyone` describes how she
+    // listened. It is exempt from the contrastive-tail scan. The exemption
+    // requires the -ing word directly after the negation,
     // so a determiner in between keeps the tail (`not the beginning`, `not a
     // building`), and five words wear the same letters without being
     // participles.
@@ -907,7 +905,7 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
         return None;
     }
     // NP scan: bounded, no clause punctuation, must close with a terminal,
-    // and must carry at least one non-whitespace character — an empty or
+    // and must carry at least one non-whitespace character. An empty or
     // whitespace-only span between the keyword and the terminal is not a
     // noun phrase.
     let np_start = j;
@@ -917,7 +915,7 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
         match c {
             '.' if !period_is_terminal(text, comma + 1 + k + 1) => {
                 // Abbreviation-internal or mid-sentence period (`U.S.`,
-                // `e.g.`): NP content, not a terminal.
+                // `e.g.`) remains NP content.
                 np_has_content = true;
                 k += 1;
                 if k - np_start > np_max {
@@ -931,9 +929,8 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
                 // A word-bounded `but` inside the tail means the negation
                 // carries its own contrastive continuation ("not in the
                 // U.S. but in Asia"): a not-X-but-Y pair, which is a
-                // legitimate contrast shape and SLOP-C008's territory, not
-                // a bare apophatic caveat. The comma-tail rule stays
-                // silent. Bounded: the NP is at most `np_max` bytes.
+                // contrast shape handled by SLOP-C008. The comma-tail rule
+                // stays silent. The NP is bounded by `np_max` bytes.
                 let np_lower = rest[np_start..k].to_ascii_lowercase();
                 if contains_word(&np_lower, "but") {
                     return None;
@@ -956,16 +953,16 @@ fn parse_tail(text: &str, comma: usize, np_max: usize) -> Option<usize> {
 }
 
 /// Recover the clause start: walk back from the comma at most `window`
-/// bytes to the nearest clause boundary — a line break, or terminal
-/// punctuation (`.`, `!`, `?`, plus `:`) followed by whitespace — as a
+/// bytes to the nearest clause boundary, a line break or terminal
+/// punctuation (`.`, `!`, `?`, plus `:`) followed by whitespace, as a
 /// single bounded backward pass. A `.` additionally goes through
 /// `period_is_terminal`, so an abbreviation (`the U.S. market`) no longer
-/// truncates the recovered clause — the suppression classifier sees the
+/// truncates the recovered clause. The suppression classifier sees the
 /// whole sentence, an FP-reducing change. The `:` `!` `?` arms are
 /// untouched: a colon followed by lowercase is a legitimate clause
 /// boundary and must stay one. Offset 0 counts as a boundary when it lies
 /// inside the window. `None` means the window was exhausted without a
-/// boundary; the caller fires by default (fail toward the evidence report).
+/// boundary. The caller fires by default (fail toward the evidence report).
 fn clause_start(text: &str, comma: usize, window: usize) -> Option<usize> {
     let lo = crate::widen_to_char_boundaries(text, comma.saturating_sub(window)..comma).start;
     let region = &text[lo..comma];
@@ -1017,9 +1014,9 @@ fn suppressed(clause: &str, openers: &HashSet<String>, second_person: &[String])
     if second_person.iter().any(|t| contains_word(&lower, t)) {
         return true;
     }
-    // 3. A deny-list verb immediately after an interior `, ` or after
-    //    `then ` — the leading-adverbial directive
-    //    ("When in doubt, use the builder, not the raw constructor.").
+    // 3. A deny-list verb directly after an interior `, ` or after
+    //    `then `, which introduces a directive after an adverbial clause
+    //    (`When in doubt, use the builder, not the raw constructor.`).
     let mut at = 0usize;
     while let Some(pos) = lower[at..].find(", ") {
         let s = at + pos + 2;
@@ -1048,14 +1045,14 @@ fn suppressed(clause: &str, openers: &HashSet<String>, second_person: &[String])
     false
 }
 
-/// Pass 6: the contrastive-tail scan (SD-Q004's T1 form), ported from
+/// Pass 6: the contrastive-tail scan (SD-Q004's T1 form), derived from
 /// ai-slop's SLOP-C007 structural evaluator. A trailing `, not <NP>.` or
 /// `, never <NP>.` tag closing its sentence fires unless the recovered
 /// clause reads as a directive: an imperative opener on the deny-list, a
 /// second-person cue before the comma, or a deny-list verb after an
 /// interior `, ` or `then `. An exhausted walk-back window fires by
-/// default. Every window is bounded by rule data; the scan runs over the
-/// raw source — slop-detector has no prose/code segmentation, and the
+/// default. Rule data bounds every window. The scan runs over the
+/// raw source. slop-detector has no prose/code segmentation, and the
 /// rule's guard states that caveat.
 fn scan_contrastive(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     if cp.contrastive_rules.is_empty() {
@@ -1148,7 +1145,7 @@ fn head_subject(toks: &[Tok], head: usize, subjects: &[Vec<String>]) -> Option<(
 }
 
 /// Whether a token is a base-form verb, by English suffix. `-s` marks the
-/// third person (`scores`), `-ing` and `-ed` mark participles; a word ending
+/// third person (`scores`), `-ing` and `-ed` mark participles. A word ending
 /// in `ss`, `us`, or `is` (`process`, `focus`, `axis`) is not inflected. The
 /// test runs only on the word a clause-initial negation governs, and every
 /// misreading resolves the same way the rule behaved before the test
@@ -1280,7 +1277,7 @@ fn denied_capability(toks: &[Tok], head: usize, dr: &DenialRule) -> Option<Strin
             return Some(subject);
         }
     }
-    // Spelling C, the subjectless clause: the negation sits at the head with
+    // Spelling C, the subjectless clause. The negation sits at the head with
     // its subject elided from the clause before it. A finite-only negation
     // takes a base or third-person capability verb. An imperative-capable
     // negation takes only the third-person form, because a base form there is
@@ -1312,9 +1309,9 @@ fn denied_capability(toks: &[Tok], head: usize, dr: &DenialRule) -> Option<Strin
 /// capability.
 ///
 /// This test covers the segment half of that reading: the coordinator is
-/// exactly `and`, so `but`, `so`, and the rest keep the command reading; the
-/// negation heads the segment past the skip; and the verb it governs is a
-/// base form from the closed capability set. The sentence half, an earlier
+/// exactly `and`, so `but`, `so`, and the rest keep the command reading. The
+/// negation heads the segment past the skip. Its verb is a base form from
+/// the closed capability set. The sentence half, an earlier
 /// segment carrying a closed-set subject, belongs to `scan_denial`, which is
 /// the only place a segment can see its neighbours.
 fn coordinated_denial(toks: &[Tok], head: usize, dr: &DenialRule) -> bool {
@@ -1350,10 +1347,10 @@ fn imperative_clause(toks: &[Tok], head: usize, dr: &DenialRule) -> bool {
 /// Cut one comma clause at every interior coordinator. The coordinator opens
 /// the segment after it, where the leading-coordinator skip already reads it,
 /// so `It does not detect authorship and never scores voice.` becomes two
-/// segments and the stack arm can see them both. This is the same
-/// segmentation pass carried one level down, not a second splitter. Cutting
-/// everywhere is safe because qualification is self-gating: a bare
-/// coordinated tail carries neither its own subject nor a head negation, so
+/// segments and the stack arm can see them both. This is the same segmentation
+/// pass applied one level down. It uses no second splitter. Cutting everywhere
+/// is safe because qualification is self-gating. A bare coordinated tail
+/// carries neither its own subject nor a head negation, so
 /// `... that a person or a model wrote anything` still yields exactly one
 /// qualifying segment.
 fn split_at_coordinators(
@@ -1379,7 +1376,7 @@ fn split_at_coordinators(
     out
 }
 
-/// One classified segment. `qualifies` marks a denial or a hedge;
+/// One classified segment. `qualifies` marks a denial or a hedge.
 /// `affirmative` marks a segment that can serve as the partner arm, meaning
 /// it names a closed-set subject and denies nothing. `referent` is what a
 /// qualifying segment claims to be about, absent when its subject is elided.
@@ -1490,15 +1487,15 @@ fn classify_clause(
     }
 }
 
-/// Pass 8: the capability-denial scan (SD-Q007). Within one block, a
-/// segment qualifies when it denies a capability of the closed subject (see
-/// `denied_capability` for the three spellings) or carries an evidential
-/// hedge phrase. The imperative test runs per segment first, so one command
-/// at the head of a sentence cannot carry a denial stack behind it. Arm A is
-/// the stack: two qualifying segments anywhere in the block. Arm B is one
+/// Pass 8: the capability-denial scan (SD-Q007). Within one block, a segment
+/// qualifies when it denies a capability of the closed subject (see
+/// `denied_capability` for the three spellings) or carries an evidential hedge
+/// phrase. The imperative test runs per segment first, so one command at the
+/// head of a sentence cannot carry a denial stack behind it. Arm A is the stack
+/// and fires for two qualifying segments anywhere in the block. Arm B is one
 /// qualifying segment beside an affirmative partner, searched in the ruled
-/// order. One finding per qualifying segment, never one per partner, and
-/// each finding names the arm that fired.
+/// order. One finding per qualifying segment, never one per partner, and each
+/// finding names the arm that fired.
 fn scan_denial(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     for dr in &cp.denial_rules {
         for block in blocks(src) {
@@ -1520,9 +1517,9 @@ fn scan_denial(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
                     // `and` segment that reads as a command on its own is a
                     // denial when an earlier segment of the same sentence
                     // named the thing, because that is the subject it
-                    // continues. It borrows that subject rather than naming
-                    // one, so it takes the absent-subject key and the
-                    // adjacency arm reads it as coreferent by definition.
+                    // continues. It borrows that subject, so it takes the
+                    // absent-subject key. The adjacency arm then reads it
+                    // as coreferent by definition.
                     for i in 0..facts.len() {
                         if facts[i].coordinated && facts[..i].iter().any(|f| f.subject.is_some()) {
                             facts[i].qualifies = true;
@@ -1590,7 +1587,7 @@ fn scan_denial(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
                         .map(move |(ci, _)| (si, ci))
                 })
                 .collect();
-            // The arm is readable from the findings themselves: several in
+            // The arm is readable from the findings themselves. Several in
             // one block is the stack, one is the adjacency form. Nothing is
             // written into the report to say so.
             let fires = qualifying.len() >= 2
@@ -1612,10 +1609,9 @@ fn scan_denial(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
 
 /// Pass 9: the rationale-leak scan (SD-Q008). A design-economics or
 /// reception-instruction marker fires only when its sentence also names a
-/// tool noun, at any position. That anchor is the whole precision budget:
-/// it keeps ordinary adverbs (`she deliberately ignored him`, `that was
-/// deliberately vague`) silent. One finding per marker occurrence, spanning
-/// the marker.
+/// tool noun, at any position. Without that noun, `she deliberately ignored
+/// him` and `that was deliberately vague` stay silent. One finding reports
+/// per marker occurrence, spanning the marker.
 fn scan_rationale(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     for rr in &cp.rationale_rules {
         for block in blocks(src) {
@@ -1641,7 +1637,7 @@ fn scan_rationale(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
 }
 
 /// Pass 2: the overlapping adapter over regex-automata's DFAs. The forward
-/// DFA yields (pattern, end) pairs; the reverse DFA anchored to the pattern
+/// DFA yields (pattern, end) pairs. The reverse DFA anchored to the pattern
 /// and bounded by the pattern's max width recovers the start.
 fn scan_rx(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     if cp.rx_meta.is_empty() || src.is_empty() {
@@ -1658,7 +1654,7 @@ fn scan_rx(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
             .try_search_overlapping_fwd(&mut fwd_cache, &input, &mut state)
             .is_err()
         {
-            // A cache failure cannot invent findings; the scan stops with
+            // A cache failure cannot invent findings. The scan stops with
             // whatever was already found.
             return;
         }
@@ -1667,7 +1663,7 @@ fn scan_rx(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
         let end = hm.offset();
         let meta = &cp.rx_meta[pid.as_usize()];
         // Bound the reverse start-recovery window by the pattern's max
-        // width: the true start is at most that many bytes before `end`.
+        // width. The true start is at most that many bytes before `end`.
         let rev_lo = match meta.max_width {
             Some(w) => end.saturating_sub(w),
             None => 0,
@@ -1682,7 +1678,7 @@ fn scan_rx(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
         if start >= end || !seen.insert((pid.as_usize(), start, end)) {
             continue;
         }
-        // The DFA matched the ASCII `\b` prefilter form; re-validate the
+        // The DFA matched the ASCII `\b` prefilter form. Re-validate the
         // declared edges against real Unicode word boundaries.
         if (meta.bound_start && !unicode_word_boundary(src, start))
             || (meta.bound_end && !unicode_word_boundary(src, end))
@@ -1714,11 +1710,11 @@ fn scan_codepoints(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
         for (slot, (rule_idx, ranges)) in cp.cp_rules.iter().enumerate() {
             if ranges.iter().any(|&(lo, hi)| lo <= v && v <= hi) {
                 let rule = &cp.rules[*rule_idx];
-                // A leading U+FEFF is an editor byte-order mark; a U+FE0E or
+                // A leading U+FEFF is an editor byte-order mark. A U+FE0E or
                 // U+FE0F right after a visible base character is an ordinary
                 // presentation selector (emoji text). Neither is residue. A
                 // selector preceded by another in-range codepoint still
-                // fires: invisible runs stay evidence.
+                // fires. Invisible runs stay evidence.
                 let in_range = |c: char| {
                     ranges
                         .iter()
@@ -1726,8 +1722,8 @@ fn scan_codepoints(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
                 };
                 // A ZWNJ or ZWJ between two joining-script characters or two
                 // pictographic characters is orthography (Indic and Arabic
-                // shaping, emoji ZWJ sequences), not residue. The backward
-                // neighbor skips one presentation selector, because emoji
+                // shaping, emoji ZWJ sequences). These joiners are exempt.
+                // The backward neighbor skips one presentation selector because emoji
                 // sequences interleave U+FE0F before the joiner. A joiner
                 // between ordinary prose characters still fires.
                 let joining_exempt = || {
@@ -1796,10 +1792,10 @@ fn scan_codepoints(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {
     }
 }
 
-/// Pass 7: the within-document self-duplication scan (SD-Q005), ported
-/// from ai-slop's SLOP-U001 in its memory-frugal form (see the
-/// `duplication` module). One hit per repeat occurrence (second and
-/// later), span = the later copy, capped at `max_reports` longest-first.
+/// Pass 7: the within-document self-duplication scan (SD-Q005), derived
+/// from ai-slop's SLOP-U001 in its memory-frugal form. It uses
+/// shared token storage in the `duplication` module. Each repeat after the
+/// first reports at the later copy, capped at `max_reports` longest-first.
 /// Raw bytes throughout: fenced content shingles like everything else,
 /// and the container pre-pass annotates what lands inside a fence.
 fn scan_duplication(cp: &Compiled, src: &str, hits: &mut Vec<Hit>) {

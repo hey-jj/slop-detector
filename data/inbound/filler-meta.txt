@@ -1,8 +1,8 @@
 # SLOP-T001 filler and meta-commentary phrases, inbound copy.
-# Edit against the vendored words/filler-meta.txt: the bare "overall" entry
-# is removed. In ai-slop it fires only at block start via the markdown
-# block model; slop-detector has no per-term position support, and bare
-# overall anywhere else is ordinary business English.
+# The bare `overall` entry from words/filler-meta.txt is removed.
+# In ai-slop it fires only at block start via the markdown block model.
+# slop-detector has no per-term position support. Bare `overall` elsewhere
+# is ordinary business English.
 it's important to note
 it is important to note
 it is crucial to note

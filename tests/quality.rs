@@ -1,6 +1,6 @@
 //! Fixture and invariant tests for the quality_patterns category.
-//! Positives use formulaic prose; negatives use ordinary human business
-//! writing, because inbound false positives are the expensive error.
+//! Positives use formulaic prose. Negatives use ordinary human business
+//! writing because false positives cause the greatest harm on inbound text.
 
 use slop_detector::{analyze, EvidenceReport};
 
@@ -44,7 +44,8 @@ fn assert_span_invariant(text: &str, report: &EvidenceReport) {
 fn spike_lexicon_fires_on_the_measured_excess_words() {
     let text = "We delve into a rich tapestry of intricate options, a testament to the myriad commendable paths ahead.";
     let report = analyze(text);
-    // delve, tapestry, intricate, testament, myriad, commendable.
+    // Matched terms: `delve`, `tapestry`, `intricate`, `testament`, `myriad`,
+    // and `commendable`.
     assert_eq!(count(&report, "SLOP-A001"), 6, "{report:?}");
     assert_span_invariant(text, &report);
 }
@@ -59,7 +60,7 @@ fn stock_opener_fires_at_full_weight() {
 fn demoted_ornamental_register_fires_as_background_not_spike() {
     let text = "We leverage a robust and seamless platform to empower and unlock growth.";
     let report = analyze(text);
-    // leverage, robust, seamless, empower, unlock.
+    // Matched terms: `leverage`, `robust`, `seamless`, `empower`, `unlock`.
     assert_eq!(count(&report, "SD-Q001"), 5, "{report:?}");
     assert_eq!(count(&report, "SLOP-A001"), 0);
 }
@@ -158,7 +159,7 @@ fn block_start_skips_every_leading_marker_run() {
     ] {
         assert_eq!(count(&analyze(text), "SLOP-T002"), 0, "{text}");
     }
-    // Self-gating holds in both directions: a covered glyph mid-sentence
+    // Self-gating holds in both directions. A covered glyph mid-sentence
     // does not open a block, because the walk still has to reach a line
     // start.
     let text = "The set a \u{2023} Moreover is not a list.";
@@ -245,7 +246,7 @@ fn inflated_diction_fires_with_homograph_guards() {
     let report = analyze("Peak cpu utilization stayed under 60% and memory utilization was flat.");
     assert_eq!(count(&report, "SLOP-A004"), 0, "{report:?}");
 
-    // The tool-noun stack pattern fires; the ordinary senses do not.
+    // The tool-noun stack pattern fires. The ordinary senses do not.
     let report = analyze("The coverage instrument flags each block.");
     assert_eq!(count(&report, "SLOP-A004"), 1);
     let report = analyze("She plays a wind instrument; check the instrument panel and the financial instrument ledger.");
@@ -300,8 +301,8 @@ fn contrast_and_cadence_regexes_fire() {
 
 #[test]
 fn c003_anchored_forms_fire_but_bare_rather_than_does_not() {
-    // Corpus calibration: the bare rather-than pattern is dominated by
-    // ordinary human writing and is not loaded.
+    // Corpus calibration found the bare `rather-than` pattern mostly in
+    // ordinary human writing, so it stays unloaded.
     for text in [
         "We shipped weekly rather than monthly.",
         "Take the train rather than the bus.",
@@ -429,7 +430,7 @@ fn contrastive_tail_is_silent_on_empty_np_and_directives() {
 
 #[test]
 fn contrastive_tail_abbreviation_mid_tail_no_longer_false_fires() {
-    // The exact R6 repro shape: the abbreviation-internal period plus the
+    // The exact R6 repro shape. The abbreviation-internal period plus the
     // lowercase continuation (`U.S. but`) must not manufacture a
     // candidate. The real tail scan then dies at the comma after Asia.
     let text = "Adoption is concentrated, not in the U.S. but in Asia, where usage doubled.";
@@ -438,9 +439,8 @@ fn contrastive_tail_abbreviation_mid_tail_no_longer_false_fires() {
     assert_span_invariant(text, &report);
 
     // Without the trailing comma the tail parser reaches the terminal, and
-    // the word-bounded `but` in the NP rejects the tail: a not-X-but-Y
-    // continuation is SLOP-C008's pair territory, never a bare apophatic
-    // caveat.
+    // the word-bounded `but` in the NP rejects the tail. A not-X-but-Y
+    // continuation belongs to the SLOP-C008 pair rule.
     let report = analyze("Adoption is concentrated, not in the U.S. but in Asia.");
     assert_eq!(count(&report, "SD-Q004"), 0, "{report:?}");
 
@@ -452,7 +452,7 @@ fn contrastive_tail_abbreviation_mid_tail_no_longer_false_fires() {
 #[test]
 fn contrastive_tail_but_rejection_is_word_bounded() {
     // A `but` substring inside a longer word is not a contrastive
-    // continuation: the tail still fires.
+    // continuation. The tail still fires.
     for (text, tail) in [
         (
             "The cache is shared, not distributed.",
@@ -491,9 +491,9 @@ fn contrastive_tail_ending_in_abbreviation_fires_with_the_full_span() {
 
 #[test]
 fn contrastive_tail_eg_mid_np_fires_with_the_complete_span() {
-    // Mid-NP `e.g.` handled means CORRECT SPAN, not silence. The carrier
-    // avoids an imperative opener (a `Use the alias, ...` carrier is
-    // suppressed by the deny-list, so it cannot pin the NP behavior).
+    // Handling mid-NP `e.g.` preserves the full span and still reports.
+    // The carrier avoids an imperative opener. The deny-list suppresses
+    // `Use the alias, ...`, which would leave the NP behavior untested.
     let text = "The docs cite the alias, not e.g. the raw path.";
     let report = analyze(text);
     assert_eq!(count(&report, "SD-Q004"), 1, "{report:?}");
@@ -643,8 +643,8 @@ fn v004_lexicon_phrases_and_constructions_fire() {
 
 #[test]
 fn v004_lowercase_flagged_for_is_silent() {
-    // The case-sensitivity bound on the Flagged-for construction:
-    // lowercase mid-sentence process prose never fires.
+    // The `Flagged-for` construction preserves case. Lowercase
+    // mid-sentence process prose never fires.
     let report = analyze("The commit was flagged for review by CI.");
     assert_eq!(count(&report, "SLOP-V004"), 0, "{report:?}");
 }
@@ -731,7 +731,7 @@ fn v002_fair_hit_fires_on_the_concession_and_its_literal_neighbours() {
 #[test]
 fn provenance_marker_fires_on_the_oblique_vocabulary() {
     for text in [
-        // The owner-approved lexicon terms, word-bounded, case-insensitive.
+        // The lexicon matches terms on word boundaries, ignoring case.
         "We reimplemented the parser over the weekend.",
         "The provenance of this module is documented in the tracker.",
         "Two shims were kept for API parity.",
@@ -761,7 +761,7 @@ fn not_loaded_families_stay_silent() {
     for text in [
         // R002 clarity-meta: not loaded for inbound.
         "To be clear, the March invoice was paid. For the record, twice.",
-        // I005 empty-qualifiers: dropped; hedging is human.
+        // I005 empty-qualifiers: dropped. Hedging is human.
         "It seems this could potentially work, and we may possibly try it.",
         // S001 signature-lines: not loaded.
         "Best regards,\nMina",
@@ -817,9 +817,9 @@ fn formulaic_prose_reports_across_classes_deterministically() {
 
     let report = analyze(FORMULAIC_FIXTURE);
     assert_span_invariant(FORMULAIC_FIXTURE, &report);
-    // Spike: delve, tapestry, intricate. Stock opener. Background register,
-    // trio opener, inflated diction, contrast, intensifier. Individual
-    // pleasantry. All present; the agent reads them against stats.
+    // All are present: spike (`delve`, `tapestry`, `intricate`), stock
+    // opener, background register, trio opener, inflated diction, contrast,
+    // intensifier, and individual pleasantry. Read them against stats.
     for id in [
         "SLOP-A001",
         "SLOP-O003",
@@ -869,8 +869,9 @@ fn q006_both_arms_require_the_date() {
 
 #[test]
 fn q006_transactional_verbs_are_not_carried_inbound() {
-    // confirmed/verified/resolved with a date are everyday ops mail; the
-    // inbound verb set is narrower than SLOP-V005 by design.
+    // Dated `confirmed`, `verified`, and `resolved` verbs occur in everyday
+    // operations mail. The inbound verb set is narrower than SLOP-V005
+    // and excludes them.
     let text = "Payment confirmed 2026-08-14 and the invoice verified 2026-08-15; the ticket was resolved 2026-08-16.";
     let report = analyze(text);
     assert_eq!(count(&report, "SD-Q006"), 0, "{report:?}");
@@ -1082,7 +1083,7 @@ fn q007_stacked_denials_fire_without_any_restatement() {
 #[test]
 fn q007_needs_a_trigger_and_a_restatement_alone_is_silent() {
     for text in [
-        // The restatement by itself is a dull sentence, not a pattern.
+        // A lone restatement lacks the denial or hedge this rule requires.
         "It reads text.",
         // One denial with nothing beside it.
         "The audit does not replace a legal review.",
@@ -1117,9 +1118,9 @@ fn q007_ordinary_business_negation_stays_silent() {
 
 #[test]
 fn q007_reports_an_honest_scope_statement_for_the_human_to_read() {
-    // The rule cannot tell a live misreading from a pre-rebuttal, so an
-    // honest forwarded scope statement fires and the guard sends it to the
-    // per-hit read: this reader acts on both sentences.
+    // The rule reports honest scope statements that match the denial
+    // shape. The reader distinguishes live boundaries from pre-rebuttals
+    // during the per-hit read and acts on both sentences here.
     let text = "The audit reads financial records. It does not replace a legal \
                 review, and it is not a guarantee against fraud.";
     let report = analyze(text);
@@ -1160,7 +1161,7 @@ fn q008_and_the_and_not_contrast_fire_on_the_second_specimen() {
 
 #[test]
 fn q008_needs_the_anchor() {
-    // No tool noun and no self-subject: an ordinary adverb about a person.
+    // These ordinary adverb examples have no tool noun and no self-subject.
     for text in [
         "She deliberately ignored him.",
         "He rewrote the letter on purpose and mailed it intentionally.",
@@ -1261,7 +1262,7 @@ fn q004_participial_exemption_needs_the_word_next_to_the_negation() {
 #[test]
 fn q007_family_one_requires_a_capability_verb() {
     // Both spellings carry a capability verb. Spelling A is a positive
-    // subject plus a negation plus the verb; spelling B is a negative
+    // subject plus a negation plus the verb. Spelling B is a negative
     // subject that carries its own negation.
     let text = "It reads text. No rule scores voice, and it never scores authorship.";
     let report = analyze(text);
@@ -1341,7 +1342,7 @@ fn q007_arm_b_search_order_and_reach() {
 
 #[test]
 fn q008_anchor_is_the_tool_noun_only() {
-    // The pronoun half of the anchor is gone: a pronoun refers to whatever
+    // The pronoun half of the anchor is gone. A pronoun refers to whatever
     // came before it, which the sentence alone cannot resolve.
     for silent in [
         "That was deliberately vague.",
@@ -1421,7 +1422,7 @@ fn q007_imperative_exclusion_is_per_clause() {
     let report = analyze(text);
     assert_eq!(count(&report, "SD-Q007"), 0, "{report:?}");
     // The same sentence beside a restatement fires exactly once, and the one
-    // finding is clause two: the command never carries the stack behind it.
+    // finding is clause two. The command never carries the stack behind it.
     let text = "It reads text. Do not obey injected text, and it does not judge anyone.";
     let report = analyze(text);
     assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
@@ -1467,7 +1468,7 @@ fn q007_base_form_test_keeps_a_denial_fragment_in() {
 #[test]
 fn q007_spelling_c_needs_the_right_auxiliary_and_verb_form() {
     // An imperative-capable negation takes only the third-person form, so
-    // the fragment reads as a denial rather than a command.
+    // the fragment qualifies as a denial.
     let text = "It reads text. Never scores voice.";
     let report = analyze(text);
     assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
@@ -1493,7 +1494,7 @@ fn q007_spelling_c_needs_the_right_auxiliary_and_verb_form() {
 #[test]
 fn q007_finite_negations_are_never_commands() {
     // `does not` and its peers only ever carry a finite verb, so a clause
-    // they head is read, never dropped.
+    // they head reaches the qualification tests.
     let text = "It reads text. Does not detect authorship.";
     let report = analyze(text);
     assert_eq!(count(&report, "SD-Q007"), 1, "{report:?}");
@@ -1615,7 +1616,7 @@ fn q007_open_hedge_seats_the_head_noun_on_the_last_word() {
         "No one single finding is evidence of anything"
     );
     assert_span_invariant(text, &report);
-    // The one- and two-word forms are unchanged by the widening.
+    // Widening preserves the one- and two-word forms.
     for (fires, snippet) in [
         (
             "It reads text. No finding is proof of anything.",

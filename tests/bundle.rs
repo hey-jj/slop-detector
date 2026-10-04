@@ -47,7 +47,7 @@ fn shared_block_across_two_files_reports_one_cross_file_entry() {
     assert!(entry.snippet.starts_with("Our platform unifies"));
     assert!(!entry.snippet_truncated);
 
-    // The shared block appears once per file: no within-file SD-Q005.
+    // The shared block appears once per file. No within-file SD-Q005.
     for f in &bundle.files {
         assert_eq!(q005(&f.report).len(), 0, "{}", f.path);
     }
@@ -99,7 +99,7 @@ fn within_file_repeats_do_not_leak_to_bundle_level() {
 /// Raw bytes, no segmentation, in bundle mode too: a >=10-word passage
 /// duplicated inside code fences in two files reports as cross-file
 /// duplication, and each occurrence carries the `fenced-code` container
-/// annotation. Annotate, never skip.
+/// annotation. Both files retain their findings.
 #[test]
 fn fenced_duplicate_reports_cross_file_with_container_annotation() {
     let block = "let a = 1; let b = 2; let c = 3; let d = 4; let e = 5; let f = 6;";
@@ -146,7 +146,7 @@ fn cross_file_prefix_decoy_does_not_mask_the_later_pair() {
 /// first four windows, and a 10-word rival gluing the passage tail to the
 /// word after the later copy. At the deciding anchor the rival ranks 10
 /// forward against the genuine copy's 9, but the genuine candidate's
-/// TOTAL run is 13 — the bundle entry must span the full 13 words in both
+/// total run is 13. The bundle entry must span the full 13 words in both
 /// files.
 #[test]
 fn cross_file_lower_forward_candidate_with_longer_total_run_wins() {
@@ -190,7 +190,7 @@ fn cross_file_lower_forward_candidate_with_longer_total_run_wins() {
 
 /// Two bundle entries sharing one path label must not panic and must
 /// slice each snippet from the document the occurrence actually came
-/// from, resolved by file index, never by re-finding the path string.
+/// from. Resolve the document by file index because path labels can repeat.
 #[test]
 fn duplicate_path_labels_never_panic_and_snippets_are_correct() {
     let short = "A short unrelated first file.";
@@ -228,7 +228,7 @@ fn duplicate_path_labels_never_panic_and_snippets_are_correct() {
 
 /// A passage shared by more than 21 files stays ONE entry retaining every
 /// occurrence: grouping happens before the cap, and the cap limits
-/// entries, never a grouped entry's occurrence list.
+/// entries. Each retained entry keeps its full occurrence list.
 #[test]
 fn passage_shared_by_more_than_21_files_keeps_every_occurrence() {
     let pairs: Vec<(String, String)> = (0..23)
@@ -256,8 +256,8 @@ fn passage_shared_by_more_than_21_files_keeps_every_occurrence() {
 }
 
 /// Each per-file report is identical to the single-document `analyze`
-/// output for the same text — bundle mode adds evidence on top, it never
-/// changes the single-document contract.
+/// output for the same text. Bundle mode adds cross-file evidence to
+/// those reports.
 #[test]
 fn per_file_reports_equal_single_document_analyze() {
     let a = format!("We delve into the numbers.\n\n{SHARED}\n");

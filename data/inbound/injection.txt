@@ -1,8 +1,7 @@
 # SLOP-J001 injection patterns, inbound copy.
-# Matching: word-bounded, case-insensitive.
-# Edits against the vendored words/injection.txt:
-#   - "you are now" is removed; it over-matches transactional mail
-#     ("you are now enrolled", "you are now live")
+# Matching uses word boundaries and ignores case.
+# The entry `you are now` from words/injection.txt is removed. It
+# over-matches transactional mail (`you are now enrolled`, `you are now live`).
 ignore previous instructions
 ignore all previous instructions
 ignore the above instructions

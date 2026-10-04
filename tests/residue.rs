@@ -69,7 +69,8 @@ fn p002_citation_artifacts_fire() {
     let report = analyze(text);
     let ids = residue_ids(&report);
     let p002 = ids.iter().filter(|id| **id == "SLOP-P002").count();
-    // contentReference, oaicite, sandbox:/mnt/data, oaiusercontent.com.
+    // Matched entries: `contentReference`, `oaicite`, `sandbox:/mnt/data`,
+    // and `oaiusercontent.com`.
     assert_eq!(p002, 4, "expected 4 P002 hits, report: {report:?}");
     assert_span_invariant(text, &report);
 }
@@ -104,7 +105,7 @@ fn p004_tracking_param_fires_once_at_the_widest_span() {
         .iter()
         .filter(|f| f.rule_id == "SLOP-P004")
         .collect();
-    // utm_source=chatgpt is contained in utm_source=chatgpt.com; the
+    // utm_source=chatgpt is contained in utm_source=chatgpt.com. The
     // contained same-rule span merges into the wider one.
     assert_eq!(hits.len(), 1, "{report:?}");
     assert_eq!(hits[0].snippet, "utm_source=chatgpt.com");
@@ -147,8 +148,8 @@ fn r001_fires_inside_a_citeturn_run() {
     let text = "Adoption doubled last year. citeturn0search2";
     let report = analyze(text);
     let ids = residue_ids(&report);
-    // The literal citeturn (P002) and the generalized marker (SD-R001)
-    // overlap and both report: distinct rules never suppress each other.
+    // The literal `citeturn` (P002) and the generalized marker (SD-R001)
+    // overlap and both report. Distinct rules never suppress each other.
     assert!(ids.contains(&"SLOP-P002"));
     assert!(ids.contains(&"SD-R001"));
 }
@@ -238,7 +239,7 @@ fn r003_invisible_codepoints_fire() {
 
 #[test]
 fn r003_soft_hyphen_and_bidi_controls_are_clean() {
-    // Soft hyphens are ordinary in Word and PDF exports; bidi format
+    // Soft hyphens are ordinary in Word and PDF exports. Bidi format
     // controls are ordinary in RTL and mixed-script text. Neither is
     // scanned.
     for (name, text) in [
@@ -259,7 +260,8 @@ fn r003_soft_hyphen_and_bidi_controls_are_clean() {
 
 #[test]
 fn r003_leading_bom_is_exempt_but_interior_bom_fires() {
-    // A Windows editor "UTF-8 with BOM" save is ordinary, not residue.
+    // A Windows editor's `UTF-8 with BOM` save is ordinary. Its leading
+    // BOM is exempt from residue findings.
     let report = analyze("\u{FEFF}Hi team,\n\nPlease find the Q3 summary attached.\n");
     assert!(!residue_ids(&report).contains(&"SD-R003"), "{report:?}");
 
@@ -282,7 +284,7 @@ fn r003_emoji_presentation_selector_is_exempt() {
 
 #[test]
 fn r003_selector_without_a_visible_base_still_fires() {
-    // At offset 0 there is no base; after another invisible it is a run.
+    // At offset 0 there is no base. After another invisible it is a run.
     for text in ["\u{FE0F}leading", "gap\u{200B}\u{FE0F}text"] {
         let report = analyze(text);
         assert!(residue_ids(&report).contains(&"SD-R003"), "{text:?}");
@@ -401,7 +403,7 @@ fn r004_html_nbsp_between_words_is_clean() {
 
 #[test]
 fn r004_digit_adjacent_positions_never_qualify() {
-    // French number grouping and clock times sit next to digits; none of
+    // French number grouping and clock times sit next to digits. None of
     // these are candidates even though the document has three occurrences.
     let text = "Prix: 1\u{202F}000 EUR, soit 12\u{202F}500 au total, des 9\u{202F}h.";
     let report = analyze(text);
@@ -436,7 +438,7 @@ fn j001_injection_phrases_report_individually_in_their_own_category() {
         "{report:?}"
     );
     assert!(snippets.contains(&"system prompt"), "{report:?}");
-    // Injection hits route to their own category, not paste_residue.
+    // Injection hits route to injection_patterns.
     assert!(!residue_ids(&report).contains(&"SLOP-J001"));
     assert_span_invariant(text, &report);
 }
@@ -449,9 +451,9 @@ fn j001_negative_on_ordinary_process_prose() {
 
 #[test]
 fn j001_word_boundary_blocks_substring_matches() {
-    // Without the word boundary these fired: "you are an ai" inside
-    // "aide", "dan mode" inside "Jordan model", "jailbreak" inside
-    // "jailbreaking".
+    // Before word boundaries, three markers fired as substring matches:
+    // the assistant-role marker inside `aide`, the mode marker across the second
+    // fixture's model name, and the device modification marker inside the third fixture's gerund.
     for text in [
         "You are an aide to the committee, so please attend.",
         "We priced it with the Jordan model everyone uses.",
@@ -464,8 +466,8 @@ fn j001_word_boundary_blocks_substring_matches() {
 
 #[test]
 fn j001_transactional_you_are_now_is_clean() {
-    // "you are now" is removed from the inbound lexicon: it over-matches
-    // transactional mail.
+    // The inbound lexicon excludes the transactional second-person marker
+    // because it over-matches transactional mail.
     for text in [
         "Congratulations, you are now enrolled in the 401k plan.",
         "Your account is verified and you are now live on the platform.",
@@ -546,7 +548,7 @@ fn long_merged_span_caps_snippet_and_sets_the_flag() {
         .iter()
         .find(|f| f.rule_id == "SD-R002")
         .expect("delimiter run fires");
-    // The span covers the full occurrence; the snippet is a capped,
+    // The span covers the full occurrence. The snippet is a capped,
     // flagged prefix.
     assert_eq!(hit.span.1 - hit.span.0, 300);
     assert!(hit.snippet.len() <= 200);
@@ -677,7 +679,7 @@ fn j001_every_new_coercion_phrase_fires() {
         );
         assert_span_invariant(&text, &report);
     }
-    // The bare word cut in review: generic security vocabulary.
+    // The bare `bypass` entry is excluded as generic security vocabulary.
     let report = analyze("The emergency stop must be unbypassable.");
     assert!(report.injection_patterns.is_empty(), "{report:?}");
 }

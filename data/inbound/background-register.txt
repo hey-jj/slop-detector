@@ -1,8 +1,8 @@
 # SD-Q001 background business register, inbound file.
-# The vendored ornamental lexicon minus the terms moved to the spike set
-# (the delve, tapestry, testament, myriad, plethora, and embark forms).
-# Pre-LLM corporate staples: counted as density, no per-span standing.
-# Matching: case-insensitive, word-boundary anchored.
+# The vendored ornamental lexicon excludes the forms moved to the spike set:
+# `delve`, `tapestry`, `testament`, `myriad`, `plethora`, and `embark`.
+# These corporate staples predate LLMs. Read them as density. An individual
+# span has no standing. Matching ignores case and uses word boundaries.
 game-changer
 game changer
 game-changing
